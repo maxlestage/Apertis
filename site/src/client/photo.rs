@@ -438,6 +438,7 @@ fn bind_actions(root: &Element) {
 }
 
 fn run_action(action: &str, button: &Element) {
+    super::close_menu(button);
     match action {
         "open" => {
             if let Some(input) = by_id::<HtmlElement>("lab-file") {
@@ -453,7 +454,7 @@ fn run_action(action: &str, button: &Element) {
         "clip" => {
             with(|lab| {
                 lab.view.clipping = !lab.view.clipping;
-                toggle_class(button, "active", lab.view.clipping);
+                super::show_clipping(&lab.root, lab.view.clipping);
             });
             request_render();
         }

@@ -27,13 +27,13 @@ wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
 web-sys = { version = "0.3", features = [
   "AudioContext", "AudioDestinationNode", "AudioNode", "BaseAudioContext", "Blob", "BlobEvent",
-  "BlobPropertyBag", "CanvasRenderingContext2d", "CssStyleDeclaration", "DataTransfer", "Document",
+  "BlobPropertyBag", "CanvasRenderingContext2d", "CssStyleDeclaration", "DataTransfer", "Document", "DomRect",
   "DomStringMap", "DomTokenList", "DragEvent", "Element", "Event", "EventTarget", "File", "FileList",
   "HtmlCanvasElement", "HtmlDialogElement", "HtmlElement", "HtmlInputElement", "HtmlMediaElement",
   "HtmlSelectElement", "HtmlVideoElement", "ImageBitmap", "ImageBitmapOptions", "ImageData",
   "ImageOrientation", "KeyboardEvent", "MediaElementAudioSourceNode", "MediaRecorder",
   "MediaRecorderOptions", "MediaStream", "MediaStreamAudioDestinationNode", "MediaStreamTrack",
-  "MouseEvent", "NodeList", "PointerEvent", "RecordingState", "ResizeQuality", "Response", "Url",
+  "MouseEvent", "Node", "NodeList", "PointerEvent", "RecordingState", "ResizeQuality", "Response", "Url",
   "WebGl2RenderingContext", "WebGlBuffer", "WebGlFramebuffer", "WebGlProgram", "WebGlShader",
   "WebGlTexture", "WebGlUniformLocation", "WebGlVertexArrayObject", "Window",
 ] }

@@ -29,6 +29,7 @@ pub fn icon(name: &str) -> Element {
         "menu" => r#"<path d="M4 7h16M4 12h16M4 17h16"/>"#,
         "phone" => r#"<rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/>"#,
         "sparkle" => r#"<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/>"#,
+        "more" => r#"<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>"#,
         "volume" => r#"<path d="M4 9v6h4l5 4V5L8 9z"/><path d="M17 9a4 4 0 0 1 0 6"/>"#,
         _ => "",
     };
