@@ -1,0 +1,61 @@
+# Publie le site sur GitHub Pages : https://<compte>.github.io/<dépôt>/
+#
+# Le site est exporté en fichiers statiques par le serveur lui-même
+# (`apertis-site export`) : pages identiques, laboratoires photo et vidéo pleinement
+# fonctionnels (ils tournent dans le navigateur). Seule la liste d'accès anticipé, qui a
+# besoin d'un serveur, renvoie vers le projet GitHub.
+#
+# Activation (une fois) : Settings → Pages → Build and deployment → Source : GitHub Actions.
+
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "site/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "heroku-build.sh"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Construire le site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Compiler le serveur et les laboratoires (WebAssembly)
+        run: ./heroku-build.sh
+      - name: Exporter le site statique
+        working-directory: site
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}
+          SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+        run: ./target/release/apertis-site export ../dist
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: Publier
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

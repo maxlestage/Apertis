@@ -17,6 +17,8 @@ path = "src/main.rs"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 paquets = { git = "https://github.com/maxlestage/Paquets" }
+# `apertis-site export` : le site statique pour GitHub Pages.
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 paquets = { git = "https://github.com/maxlestage/Paquets", default-features = false, features = ["client"] }

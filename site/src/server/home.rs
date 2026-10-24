@@ -300,6 +300,22 @@ fn faq() -> Element {
 }
 
 pub fn waitlist(count: u64, thanks: bool, error: bool) -> Element {
+    if super::is_static() {
+        // Hébergement statique (GitHub Pages) : pas de serveur pour enregistrer l'adresse.
+        return section().class("section").attr("id", "liste").child(
+            div()
+                .class("waitlist glass")
+                .child(eyebrow("Accès anticipé"))
+                .child(h2().text("Soyez parmi les premiers."))
+                .child(p().class("lead").text("Suivez le projet sur GitHub : l'ouverture de la bêta TestFlight y sera annoncée en premier."))
+                .child(
+                    div()
+                        .class("cta-row")
+                        .child(a().href("https://github.com/maxlestage/Apertis").attr("rel", "noopener").class("btn btn-large").child(span().text("Suivre Apertis sur GitHub")).child(icon("arrow")))
+                        .child(a().href("/labo").class("btn btn-large btn-ghost").text("Essayer le labo")),
+                ),
+        );
+    }
     section()
         .class("section")
         .attr("id", "liste")
