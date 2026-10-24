@@ -83,11 +83,21 @@ swift test --package-path Packages/ApertisCore
 
 Le site d'Apertis est dans [`site/`](site), écrit en Rust avec [Paquets](https://github.com/maxlestage/Paquets) :
 
-- une page de présentation rendue par le serveur (SEO, thème sombre, installable comme application web) ;
-- **le labo**, une démo interactive de la retouche (curseurs, styles, comparaison avant/après),
-  compilée en WebAssembly ([`site/src/lib.rs`](site/src/lib.rs)) ;
-- une **liste d'attente** enregistrée en base de données (PostgreSQL sur Heroku), sans API publique ;
-- la sécurité de Paquets devant chaque requête (pare-feu applicatif, limitation de débit, CSRF, CSP).
+- **Accueil** : présentation, comparateur avant/après, fonctionnalités, styles, tarifs, questions
+  fréquentes et liste d'accès anticipé (PostgreSQL sur Heroku, sans API publique) ;
+- **Labo photo** (`/labo`) : un vrai laboratoire de développement dans le navigateur, sur vos propres
+  photos : lumière, couleur, courbe paramétrique, TSL 8 plages, étalonnage 3 voies, grain, vignette,
+  netteté, rotation, miroir, recadrage, redressement, 9 styles avec vignettes, histogramme et alerte
+  d'écrêtage, avant/après, historique (⌘Z), recettes `.json`, export JPEG/PNG/WebP en pleine résolution ;
+- **Labo vidéo** (`/labo/video`) : chaque image est étalonnée en direct pendant la lecture, points
+  d'entrée et de sortie, styles, histogramme, export MP4/WebM avec le son ;
+- **Confidentialité**, **mentions légales**, page 404.
+
+Le moteur ([`site/src/grade.rs`](site/src/grade.rs)) reprend le pipeline de l'app iOS : étape linéaire
+(balance des blancs, exposition), tonalité et couleur cuites dans une LUT 3D 33³, effets. Il tourne sur
+le GPU (WebGL2, [`site/src/client`](site/src/client)) et est testé en Rust natif. Tout est calculé sur
+l'appareil : aucune image n'est envoyée. Les images de démonstration du site sont développées avec ce
+même moteur (`cargo run -p apertis-site --example bake`).
 
 En local :
 

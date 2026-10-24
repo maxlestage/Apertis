@@ -25,7 +25,8 @@ target="${CARGO_TARGET_DIR:-target}"
 echo "-----> Compilation du serveur"
 cargo build --release -p apertis-site --bin apertis-site
 mkdir -p site/target/release
-cp "$target/release/apertis-site" site/target/release/
+cp "$target/release/apertis-site" site/target/release/apertis-site.new
+mv -f site/target/release/apertis-site.new site/target/release/apertis-site
 echo "       site/target/release/apertis-site prêt"
 
 echo "-----> Compilation des îlots (WebAssembly)"
