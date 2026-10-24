@@ -986,4 +986,77 @@ mod tests {
             }
         }
     }
+
+    /// Fichier de référence lu par les tests de l'app (`ApertisCore`) : mêmes recettes,
+    /// mêmes couleurs, même cadrage. `UPDATE_PARITY=1 cargo test` le régénère.
+    #[test]
+    fn parity_fixture_is_up_to_date() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../Packages/ApertisCore/Tests/ApertisCoreTests/Resources/parity.json");
+        let fixture = parity_fixture();
+        if std::env::var_os("UPDATE_PARITY").is_some() {
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, &fixture).unwrap();
+        }
+        let current = std::fs::read_to_string(&path).unwrap_or_default();
+        assert!(current == fixture, "parity.json est périmé : lancez UPDATE_PARITY=1 cargo test");
+    }
+
+    fn parity_fixture() -> String {
+        let num = |v: f32| format!("{v:.6}");
+        let rgb = |c: Rgb| format!("[{},{},{}]", num(c[0]), num(c[1]), num(c[2]));
+        let mut inputs = Vec::new();
+        for r in [0.0, 0.2, 0.45, 0.7, 1.0] {
+            for g in [0.0, 0.3, 0.6, 1.0] {
+                for b in [0.05, 0.5, 0.95] {
+                    inputs.push([r, g, b]);
+                }
+            }
+        }
+        let mut cases: Vec<Settings> = PRESETS.iter().map(|p| apply_preset(&Settings::default(), p)).collect();
+        for (key, value) in [
+            ("contrast", 100.0), ("contrast", -100.0), ("highlights", 100.0), ("highlights", -100.0),
+            ("shadows", 100.0), ("shadows", -100.0), ("whites", 80.0), ("blacks", -80.0), ("curve0", 70.0),
+            ("curve3", -60.0), ("hsl_h1", 60.0), ("hsl_s5", -80.0), ("hsl_l3", 50.0), ("vibrance", 70.0),
+            ("saturation", -40.0), ("grade_s0", 80.0), ("grade_s2", 60.0), ("fade", 100.0),
+        ] {
+            let mut s = Settings::default();
+            s.set(key, value);
+            cases.push(s);
+        }
+        let colors: Vec<String> = cases
+            .iter()
+            .map(|s| {
+                let outputs: Vec<String> = inputs.iter().map(|c| rgb(develop(s, *c))).collect();
+                format!("{{\"recipe\":{},\"outputs\":[{}]}}", s.to_json(), outputs.join(","))
+            })
+            .collect();
+        let presets: Vec<String> = PRESETS
+            .iter()
+            .map(|p| format!("{{\"id\":\"{}\",\"name\":\"{}\",\"recipe\":{}}}", p.id, p.name, apply_preset(&Settings::default(), p).to_json()))
+            .collect();
+        let mut frames = Vec::new();
+        for (aspect, rotate, flip, straighten) in
+            [(0, 0, false, 0.0), (1, 0, false, 12.0), (2, 1, false, 0.0), (5, 2, true, -7.5), (6, 3, false, 30.0), (4, 1, true, 3.0)]
+        {
+            let s = Settings { aspect, rotate, flip, straighten, ..Settings::default() };
+            let g = geometry(&s, 4032, 3024);
+            let m: Vec<String> = g.matrix.iter().map(|v| num(*v)).collect();
+            frames.push(format!(
+                "{{\"recipe\":{},\"source\":[4032,3024],\"size\":[{},{}],\"matrix\":[{}]}}",
+                s.to_json(),
+                g.width,
+                g.height,
+                m.join(",")
+            ));
+        }
+        let inputs: Vec<String> = inputs.iter().map(|c| rgb(*c)).collect();
+        format!(
+            "{{\n\"inputs\":[{}],\n\"presets\":[\n{}\n],\n\"colors\":[\n{}\n],\n\"geometry\":[\n{}\n]\n}}\n",
+            inputs.join(","),
+            presets.join(",\n"),
+            colors.join(",\n"),
+            frames.join(",\n")
+        )
+    }
 }

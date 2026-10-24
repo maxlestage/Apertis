@@ -15,6 +15,8 @@ Caméra professionnelle, laboratoire photo RAW et studio vidéo pour iPhone et i
 - **Local et privé** : aucun cloud. Les originaux ne sont jamais modifiés ; projets versionnés,
   enregistrés de façon atomique ; tout est visible dans l'app Fichiers.
 
+Le site et l'application rendent les images de la même façon : voir [PARITE.md](PARITE.md).
+
 ## Architecture
 
 ```

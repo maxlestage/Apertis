@@ -7,6 +7,14 @@ import ApertisCore
 final class GradeTable: @unchecked Sendable {
     private let lock = NSLock()
     private var entries: [(start: CMTime, end: CMTime, grade: DevelopSettings)] = []
+    private var bypass = false
+
+    /// Avant / après : sans étalonnage pendant la comparaison.
+    func setBypass(_ value: Bool) {
+        lock.lock()
+        bypass = value
+        lock.unlock()
+    }
 
     func set(_ clips: [Clip]) {
         lock.lock()
@@ -17,6 +25,7 @@ final class GradeTable: @unchecked Sendable {
     func grade(at time: CMTime) -> DevelopSettings? {
         lock.lock()
         defer { lock.unlock() }
+        if bypass { return nil }
         return entries.first { $0.start <= time && time < $0.end }?.grade
     }
 }
@@ -123,20 +132,36 @@ enum CompositionBuilder {
         audioMix.inputParameters = parameters
 
         grades.set(mainClips)
+        // Format du film : celui du premier plan, appliqué à tout le montage (comme le laboratoire du site).
+        let filmAspect = mainClips.first?.grade.crop.aspect ?? 0
         var videoComposition: AVVideoComposition?
         if !mainClips.isEmpty {
             let mutable = AVMutableVideoComposition(asset: composition) { request in
                 let source = request.sourceImage
-                guard let grade = grades.grade(at: request.compositionTime), !grade.isNeutral else {
+                let renderSize = request.renderSize
+                guard let grade = grades.grade(at: request.compositionTime), !grade.isNeutral || filmAspect != 0 else {
                     request.finish(with: source, context: nil)
                     return
                 }
                 var videoGrade = grade
-                videoGrade.crop = CropSettings()  // le cadre vidéo est fixé par la composition
-                let output = GradeRenderer.shared.apply(videoGrade, to: source, source: .developed, cubeDimension: cubeDimension)
+                // Un plan garde son redressement ; rotation et miroir ne s'appliquent qu'aux photos.
+                videoGrade.crop = CropSettings(aspect: filmAspect, angle: grade.crop.angle)
+                let graded = GradeRenderer.shared.apply(videoGrade, to: source, source: .developed, cubeDimension: cubeDimension)
+                // Le cadre redressé est plus petit que l'image : on le ramène à la taille du film.
+                let extent = graded.extent
+                let scale = max(renderSize.width / max(extent.width, 1), renderSize.height / max(extent.height, 1))
+                let output = graded.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+                    .cropped(to: CGRect(origin: .zero, size: renderSize))
                 request.finish(with: output, context: nil)
             }
             mutable.frameDuration = timeline.frameDuration.cmTime
+            if filmAspect != 0 {
+                let natural = mutable.renderSize
+                let frame = FrameGeometry(crop: CropSettings(aspect: filmAspect),
+                                          sourceWidth: natural.width, sourceHeight: natural.height)
+                // Dimensions paires, exigées par les encodeurs vidéo.
+                mutable.renderSize = CGSize(width: frame.width / 2 * 2, height: frame.height / 2 * 2)
+            }
             videoComposition = mutable
         }
         return BuiltComposition(composition: composition, videoComposition: videoComposition, audioMix: audioMix)

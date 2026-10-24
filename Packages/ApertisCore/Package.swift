@@ -11,6 +11,6 @@ let package = Package(
     ],
     targets: [
         .target(name: "ApertisCore"),
-        .testTarget(name: "ApertisCoreTests", dependencies: ["ApertisCore"]),
+        .testTarget(name: "ApertisCoreTests", dependencies: ["ApertisCore"], resources: [.copy("Resources")]),
     ]
 )

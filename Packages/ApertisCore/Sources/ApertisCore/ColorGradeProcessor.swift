@@ -1,25 +1,31 @@
 import Foundation
 
-/// Étape « couleur » du pipeline de développement, en espace sRGB encodé [0, 1].
+/// Étape « tonalité et couleur » du pipeline de développement, en espace sRGB encodé [0, 1].
 ///
 /// Le pipeline complet est découpé en trois étapes :
-/// 1. **Linéaire** (Core Image / CIRAWFilter) : dématriçage, balance des blancs, exposition,
-///    récupération des hautes lumières (`highlights` < 0) et débouchage des ombres.
-/// 2. **Couleur** (ce type) : points blanc/noir, contraste, hautes lumières positives, courbes,
-///    TSL, vibrance, saturation, étalonnage 3 voies, fondu et LUT créative.
-///    Cette étape est une fonction pure couleur → couleur : elle est « cuite » dans un cube 3D
-///    (`makeCube`) appliqué sur le GPU par `CIColorCubeWithColorSpace`. L'aperçu, l'export
-///    photo et la vidéo utilisent donc exactement le même calcul, vérifié par les tests.
-/// 3. **Spatiale** (Core Image) : réduction du bruit, netteté, vignette, grain, recadrage.
+/// 1. **Linéaire** (Core Image / CIRAWFilter) : dématriçage, balance des blancs, exposition.
+/// 2. **Tonalité et couleur** (ce type) : points noir et blanc, contraste, hautes lumières,
+///    ombres, courbe paramétrique, courbes à points, TSL, vibrance, saturation, étalonnage
+///    3 voies, fondu et LUT créative. Fonction pure couleur → couleur, « cuite » dans un cube
+///    3D (`makeCube`) appliqué sur le GPU : aperçu, export photo et vidéo font le même calcul.
+/// 3. **Effets** (Core Image) : réduction du bruit, netteté, vignette, grain, cadrage.
+///
+/// Les calculs reproduisent exactement ceux du laboratoire du site (`site/src/grade.rs`,
+/// fonction `develop`) : un style ou une recette donne le même rendu dans l'app et en ligne.
+/// Les courbes à points, la luminosité des roues d'étalonnage et la LUT créative sont propres
+/// à l'app et s'ajoutent sans rien changer quand elles sont neutres.
 public struct ColorGradeProcessor: Sendable {
     public let settings: DevelopSettings
     private let lut: CubeLUT?
+    private let lutIntensity: Float
 
-    private let levelsActive: Bool
+    private let toneActive: Bool
     private let blackPoint: Float
     private let whitePoint: Float
-    private let contrastFactor: Float
-    private let highlightBoost: Float
+    private let contrast: Float
+    private let highlights: Float
+    private let shadows: Float
+    private let parametric: [Float]
     private let masterCurve: ToneCurve
     private let redCurve: ToneCurve
     private let greenCurve: ToneCurve
@@ -28,35 +34,38 @@ public struct ColorGradeProcessor: Sendable {
     private let hslBands: [HSLBand]
     private let vibrance: Float
     private let saturation: Float
-    private let gradeOffsets: (shadows: RGB, midtones: RGB, highlights: RGB)
+    private let gradeHues: [Float]
+    private let gradeAmounts: [Float]
+    private let gradeLuminance: [Float]
     private let gradingActive: Bool
     private let fade: Float
-    private let lutIntensity: Float
 
     /// - Parameter lut: la LUT résolue correspondant à `settings.lut` (ignorée si `settings.lut` est nil).
     public init(settings rawSettings: DevelopSettings, lut: CubeLUT? = nil) {
         let s = rawSettings.clamped()
         settings = s
-        blackPoint = Float(-s.blacks / 100 * 0.1)
-        whitePoint = Float(1 - s.whites / 100 * 0.1)
-        levelsActive = s.blacks != 0 || s.whites != 0
-        contrastFactor = Float(exp2(s.contrast / 100))
-        highlightBoost = Float(max(s.highlights, 0) / 100)
+        blackPoint = Float(-s.blacks / 100 * 0.08)
+        whitePoint = Float(1 - s.whites / 100 * 0.12)
+        contrast = Float(s.contrast)
+        highlights = Float(s.highlights)
+        shadows = Float(s.shadows)
+        parametric = s.parametricCurve.map(Float.init)
+        toneActive = s.blacks != 0 || s.whites != 0 || s.contrast != 0 || s.highlights != 0 || s.shadows != 0
+            || parametric.contains { $0 != 0 }
         masterCurve = ToneCurve(points: s.curves.master)
         redCurve = ToneCurve(points: s.curves.red)
         greenCurve = ToneCurve(points: s.curves.green)
         blueCurve = ToneCurve(points: s.curves.blue)
         hslActive = !s.hsl.isNeutral
         hslBands = s.hsl.bands
-        vibrance = Float(s.vibrance / 100)
-        saturation = Float(s.saturation / 100)
-        func offset(_ w: GradeWheel) -> RGB {
-            let tint = ColorMath.hslToRgb(h: Float(w.hue), s: 1, l: 0.5) - RGB(repeating: 0.5)
-            return tint * Float(w.saturation / 100) * 0.2 + RGB(repeating: Float(w.luminance / 100) * 0.2)
-        }
-        gradeOffsets = (offset(s.grading.shadows), offset(s.grading.midtones), offset(s.grading.highlights))
+        vibrance = Float(s.vibrance)
+        saturation = Float(s.saturation)
+        let wheels = [s.grading.shadows, s.grading.midtones, s.grading.highlights]
+        gradeHues = wheels.map { Float($0.hue) }
+        gradeAmounts = wheels.map { Float($0.saturation / 100) }
+        gradeLuminance = wheels.map { Float($0.luminance / 100) }
         gradingActive = !s.grading.isNeutral
-        fade = Float(s.fade / 100) * 0.12
+        fade = Float(s.fade / 100) * 0.14
         if let reference = s.lut, let lut {
             self.lut = lut
             lutIntensity = Float(reference.intensity / 100)
@@ -66,31 +75,74 @@ public struct ColorGradeProcessor: Sendable {
         }
     }
 
-    /// Vrai si l'étape couleur n'a aucun effet : le moteur peut alors l'omettre.
+    /// Vrai si l'étape n'a aucun effet : le moteur peut alors l'omettre.
     public var isIdentity: Bool {
-        !levelsActive && contrastFactor == 1 && highlightBoost == 0
-            && masterCurve.isIdentity && redCurve.isIdentity && greenCurve.isIdentity && blueCurve.isIdentity
+        !toneActive && masterCurve.isIdentity && redCurve.isIdentity && greenCurve.isIdentity && blueCurve.isIdentity
             && !hslActive && vibrance == 0 && saturation == 0 && !gradingActive && fade == 0
             && (lut == nil || lutIntensity == 0)
     }
 
-    /// Applique l'étape couleur à une couleur sRGB encodée.
+    // MARK: Tonalité (identique à `tone` et `parametric` du site)
+
+    private func tone(_ input: Float) -> Float {
+        var x = min(max((input - blackPoint) / (whitePoint - blackPoint), 0), 1)
+        if contrast != 0 {
+            let k = exp2(contrast / 100 * 1.2)
+            let pivot: Float = 0.46
+            x = x < pivot ? pivot * pow(x / pivot, k) : 1 - (1 - pivot) * pow((1 - x) / (1 - pivot), k)
+        }
+        if highlights != 0 {
+            x += highlights / 100 * 0.3 * ColorMath.smoothstep(0.5, 1, x) * (highlights < 0 ? 1 : 1 - x * 0.5)
+        }
+        if shadows != 0 {
+            let w = x * (1 - x) * (1 - x) * 6.75 * (1 - ColorMath.smoothstep(0.6, 1, x))
+            x += shadows / 100 * 0.14 * w
+        }
+        return min(max(x, 0), 1)
+    }
+
+    private func parametricCurve(_ x: Float) -> Float {
+        let centers: [Float] = [0.12, 0.37, 0.63, 0.88]
+        var y = x
+        for (i, center) in centers.enumerated() {
+            let a = parametric[i] / 100
+            if a != 0 {
+                let d = min(max((x - center) / 0.25, -1), 1)
+                y += a * 0.1 * 0.5 * (1 + cos(d * .pi))
+            }
+        }
+        return min(max(y, 0), 1)
+    }
+
+    /// Applique l'étape à une couleur sRGB encodée.
     public func apply(_ input: RGB) -> RGB {
         var c = simd_clamp01(input)
 
-        if levelsActive {
-            c = (c - RGB(repeating: blackPoint)) / (whitePoint - blackPoint)
-        }
-        if contrastFactor != 1 {
-            let pivot = RGB(repeating: ColorMath.middleGrey)
-            c = pivot + (c - pivot) * contrastFactor
-        }
-        if highlightBoost > 0 {
+        // Tonalité sur la luminance, teinte conservée.
+        if toneActive {
             let l = ColorMath.luminance(c)
-            c += RGB(repeating: highlightBoost * 0.25 * ColorMath.smoothstep(0.5, 1, l))
+            let tl = parametricCurve(tone(l))
+            if l > 1e-5 {
+                c *= tl / l
+                // Les couleurs qui dépasseraient le blanc se rapprochent du blanc au lieu d'écrêter.
+                let m = max(c.x, c.y, c.z)
+                if m > 1 {
+                    let t = min((m - 1) / m, 1)
+                    let n = c / m
+                    c = n + RGB(repeating: t) * (RGB(repeating: 1) - n)
+                    let l2 = ColorMath.luminance(c)
+                    if l2 > 1e-5 {
+                        let k2 = min(tl / l2, 1 / max(max(c.x, c.y, c.z), 1e-5))
+                        c *= k2
+                    }
+                }
+            } else {
+                c = RGB(repeating: tl)
+            }
+            c = simd_clamp01(c)
         }
-        c = simd_clamp01(c)
 
+        // Courbes à points (propres à l'app).
         if !masterCurve.isIdentity {
             c = RGB(masterCurve.evaluate(c.x), masterCurve.evaluate(c.y), masterCurve.evaluate(c.z))
         }
@@ -100,21 +152,28 @@ public struct ColorGradeProcessor: Sendable {
 
         if vibrance != 0 || saturation != 0 {
             let l = ColorMath.luminance(c)
-            let currentSaturation = max(c.x, c.y, c.z) - min(c.x, c.y, c.z)
-            let factor = (1 + vibrance * (1 - currentSaturation)) * (1 + saturation)
+            let chroma = max(c.x, c.y, c.z) - min(c.x, c.y, c.z)
+            let factor = (1 + vibrance / 100 * (1 - chroma)) * (1 + saturation / 100)
             c = simd_clamp01(RGB(repeating: l) + (c - RGB(repeating: l)) * factor)
         }
 
         if gradingActive {
             let l = min(max(ColorMath.luminance(c), 0), 1)
-            let ws = (1 - l) * (1 - l)
-            let wh = l * l
-            let wm = 2 * l * (1 - l)
-            c = simd_clamp01(c + gradeOffsets.shadows * ws + gradeOffsets.midtones * wm + gradeOffsets.highlights * wh)
+            let weights: [Float] = [(1 - l) * (1 - l), 2 * l * (1 - l), l * l]
+            for zone in 0..<3 {
+                if gradeAmounts[zone] > 0 {
+                    let tint = ColorMath.hslToRgb(h: gradeHues[zone], s: 1, l: 0.5)
+                    c += (tint - RGB(repeating: 0.5)) * (gradeAmounts[zone] * 0.22 * weights[zone])
+                }
+                if gradeLuminance[zone] != 0 {
+                    c += RGB(repeating: gradeLuminance[zone] * 0.2 * weights[zone])
+                }
+            }
+            c = simd_clamp01(c)
         }
 
         if fade > 0 {
-            c = RGB(repeating: fade) + c * (1 - fade)
+            c = RGB(fade + c.x * (1 - fade), fade + c.y * (1 - fade * 0.6), fade + c.z * (1 - fade * 0.3))
         }
 
         if let lut, lutIntensity > 0 {
@@ -136,8 +195,7 @@ public struct ColorGradeProcessor: Sendable {
         let lowerHue = ranges[lower].centerHue
         var upperHue = ranges[upper].centerHue
         if upperHue <= lowerHue { upperHue += 360 }
-        var hh = h
-        if hh < lowerHue { hh += 360 }
+        let hh = h < lowerHue ? h + 360 : h
         let f = ColorMath.smoothstep(0, 1, (hh - lowerHue) / (upperHue - lowerHue))
         let a = hslBands[lower]
         let b = hslBands[upper]
