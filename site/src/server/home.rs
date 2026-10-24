@@ -278,7 +278,7 @@ fn pricing() -> Element {
                 .child(plan(
                     "Pro",
                     "Prix au lancement",
-                    "Mensuel ou annuel, essai gratuit.",
+                    "Abonnement mensuel, sans engagement. 7 jours d'essai gratuit.",
                     &["Développement RAW et ProRAW avancé", "Courbes, TSL, étalonnage, LUT 3D", "Timeline multipiste et étalonnage par plan", "Export HEIF 10 bits, TIFF 16 bits, 4K HDR", "Tous les styles et ceux à venir"],
                     true,
                 )),
