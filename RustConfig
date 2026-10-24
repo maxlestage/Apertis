@@ -1,0 +1,6 @@
+# Heroku avec le buildpack emk/rust (https://elements.heroku.com/buildpacks/emk/heroku-buildpack-rust).
+# Le buildpack installe Rust, puis heroku-build.sh compile le site (serveur et îlots
+# WebAssembly) à la place de sa propre compilation.
+VERSION=stable
+RUST_SKIP_BUILD=1
+trap 'status=$?; if [ "$status" -eq 0 ]; then ENV_DIR="$ENV_DIR" bash "$BUILD_DIR/heroku-build.sh" || exit 1; fi' EXIT

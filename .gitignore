@@ -5,3 +5,8 @@ DerivedData/
 xcuserdata/
 *.xcworkspace/xcuserdata/
 .swiftpm/
+# Site (Rust)
+/target/
+/site/target/
+/site/pkg/
+*.db
