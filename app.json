@@ -1,20 +1,25 @@
 {
   "name": "Apertis",
-  "description": "Le site d'Apertis (caméra pro, labo RAW et studio vidéo pour iPhone), écrit en Rust avec Paquets : présentation, démo interactive et liste d'attente.",
+  "description": "Le site d'Apertis (caméra pro, labo RAW et studio vidéo pour iPhone), écrit en Rust avec Paquets : présentation, laboratoires photo et vidéo en ligne, liste d'accès anticipé.",
   "repository": "https://github.com/maxlestage/Apertis",
-  "keywords": ["rust", "paquets", "ios", "photo", "video"],
+  "keywords": [
+    "rust",
+    "paquets",
+    "ios",
+    "photo",
+    "video"
+  ],
   "stack": "heroku-26",
   "buildpacks": [
-    { "url": "emk/rust" }
-  ],
-  "env": {
-    "REPOS_TOKEN": {
-      "description": "Jeton GitHub en lecture seule donnant accès aux dépôts privés de Paquets (Paquets, Vitesse, Securite, Memoire, Active). GitHub → Settings → Developer settings → Fine-grained tokens.",
-      "required": true
+    {
+      "url": "emk/rust"
     }
-  },
+  ],
   "addons": [
-    { "plan": "heroku-postgresql:essential-0", "as": "DATABASE" }
+    {
+      "plan": "heroku-postgresql:essential-0",
+      "as": "DATABASE"
+    }
   ],
   "success_url": "/"
 }
