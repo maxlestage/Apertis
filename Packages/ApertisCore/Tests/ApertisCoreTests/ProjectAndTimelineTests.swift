@@ -231,3 +231,40 @@ final class CaptureCapabilitiesTests: XCTestCase {
         XCTAssertNil(CaptureCapabilities().resolve(VideoModeQuery()))
     }
 }
+
+final class ArrangeAndPresetTests: XCTestCase {
+    func testArrangeSequentiallyReordersWithoutGaps() throws {
+        var timeline = Timeline(frameRate: Rational(25))
+        let a = try timeline.append(mediaID: "a", duration: Rational(1))
+        let b = try timeline.append(mediaID: "b", duration: Rational(2))
+        let c = try timeline.append(mediaID: "c", duration: Rational(3))
+        let track = timeline.mainVideoTrack.id
+        try timeline.arrangeSequentially([c.id, a.id], on: track)
+        XCTAssertEqual(timeline.clips(on: track).map(\.mediaID), ["c", "a", "b"])
+        XCTAssertEqual(timeline.clip(a.id)?.start, Rational(3))
+        XCTAssertEqual(timeline.clip(b.id)?.start, Rational(4))
+        XCTAssertEqual(timeline.duration, Rational(6))
+    }
+
+    func testPresetKeepsPhotoSpecificSettings() {
+        var base = DevelopSettings()
+        base.exposure = 0.8
+        base.temperature = 12
+        base.crop.angle = 3
+        base.contrast = 50
+        let styled = BuiltInPresets.blackAndWhite.apply(to: base)
+        XCTAssertEqual(styled.exposure, 0.8)
+        XCTAssertEqual(styled.temperature, 12)
+        XCTAssertEqual(styled.crop.angle, 3)
+        XCTAssertEqual(styled.saturation, -100)
+        XCTAssertEqual(styled.contrast, BuiltInPresets.blackAndWhite.settings.contrast)
+    }
+
+    func testBuiltInPresetsAreValidAndDistinct() {
+        XCTAssertEqual(Set(BuiltInPresets.all.map(\.id)).count, BuiltInPresets.all.count)
+        for preset in BuiltInPresets.all {
+            XCTAssertEqual(preset.settings, preset.settings.clamped(), preset.name)
+            XCTAssertFalse(ColorGradeProcessor(settings: preset.settings).isIdentity, preset.name)
+        }
+    }
+}

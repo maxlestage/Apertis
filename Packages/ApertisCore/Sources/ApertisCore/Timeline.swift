@@ -229,6 +229,21 @@ public struct Timeline: Codable, Equatable, Sendable {
         return second.id
     }
 
+    /// Place les plans d'une piste bout à bout, dans l'ordre donné, à partir de zéro.
+    /// Les plans de la piste absents de `order` sont placés à la suite, dans leur ordre actuel.
+    public mutating func arrangeSequentially(_ order: [UUID], on trackID: UUID) throws {
+        guard tracks.contains(where: { $0.id == trackID }) else { throw TimelineError.unknownTrack }
+        let current = clips(on: trackID)
+        let ordered = order.compactMap { id in current.first { $0.id == id } }
+            + current.filter { !order.contains($0.id) }
+        var position = Rational.zero
+        for clip in ordered {
+            let i = clips.firstIndex { $0.id == clip.id }!
+            clips[i].start = position
+            position = position + clip.duration
+        }
+    }
+
     /// Étalonnage par plan : copie l'étalonnage d'un plan vers d'autres plans.
     public mutating func copyGrade(from sourceID: UUID, to targetIDs: [UUID]) throws {
         guard let source = clip(sourceID) else { throw TimelineError.unknownClip }
