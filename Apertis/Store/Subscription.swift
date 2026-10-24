@@ -18,7 +18,7 @@ enum ProFeature: String, Identifiable {
         case .rawDetails: return "Réduction du bruit RAW"
         case .highBitDepthExport: return "Export HEIF 10 bits et TIFF 16 bits"
         case .clipGrading: return "Étalonnage par plan"
-        case .audioTracks: return "Pistes audio"
+        case .audioTracks: return "Piste musique"
         }
     }
 }
@@ -134,9 +134,9 @@ struct PaywallView: View {
     var feature: ProFeature?
 
     private let benefits = [
-        ("camera.aperture", "Développement RAW et ProRAW avancé"),
         ("point.topleft.down.to.point.bottomright.curvepath", "Courbes, TSL, étalonnage, LUT 3D"),
-        ("film.stack", "Étalonnage par plan et pistes audio"),
+        ("camera.aperture", "Réduction du bruit RAW et ProRAW"),
+        ("film.stack", "Étalonnage plan par plan et piste musique"),
         ("square.and.arrow.up", "Export HEIF 10 bits et TIFF 16 bits"),
         ("square.stack.3d.up", "Tous les styles et ceux à venir"),
     ]

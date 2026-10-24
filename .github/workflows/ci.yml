@@ -43,5 +43,16 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO \
             -quiet
+      - name: Tests de rendu sur le simulateur
+        run: |
+          device=$(xcrun simctl list devices available | grep -m1 -E 'iPhone 1[5-9]' | grep -oE '[0-9A-F-]{36}')
+          echo "Simulateur : $device"
+          xcodebuild test \
+            -project Apertis.xcodeproj \
+            -scheme Apertis \
+            -destination "id=$device" \
+            -only-testing:ApertisTests \
+            CODE_SIGNING_ALLOWED=NO \
+            -quiet
       - name: Tests du cœur (macOS)
         run: swift test --package-path Packages/ApertisCore
