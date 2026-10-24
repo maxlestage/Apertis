@@ -5,19 +5,6 @@
 # Le Procfile démarre site/target/release/apertis-site depuis site/ (public/ et pkg/).
 set -euo pipefail
 
-# Paquets et ses paquets sont des dépôts privés : Cargo les récupère avec git, qui
-# demande les identifiants GitHub à un assistant lisant la config var REPOS_TOKEN
-# (le buildpack la transmet dans ENV_DIR). Le jeton n'apparaît dans aucune URL.
-if [ -z "${REPOS_TOKEN:-}" ] && [ -n "${ENV_DIR:-}" ] && [ -f "$ENV_DIR/REPOS_TOKEN" ]; then
-  REPOS_TOKEN=$(<"$ENV_DIR/REPOS_TOKEN")
-fi
-if [ -n "${REPOS_TOKEN:-}" ]; then
-  export REPOS_TOKEN CARGO_NET_GIT_FETCH_WITH_CLI=true GIT_CONFIG_COUNT=1 \
-    GIT_CONFIG_KEY_0=credential.https://github.com.helper \
-    GIT_CONFIG_VALUE_0='!f() { test "$1" = get && echo username=x-access-token && echo "password=$REPOS_TOKEN"; }; f'
-else
-  echo "       pas de config var REPOS_TOKEN : les dépendances privées ne pourront pas être récupérées"
-fi
 cd "$(dirname "$0")"
 # Sur Heroku, Cargo compile dans le cache du buildpack (CARGO_TARGET_DIR).
 target="${CARGO_TARGET_DIR:-target}"

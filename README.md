@@ -110,23 +110,17 @@ cargo test -p apertis-site      # depuis la racine
 
 [![Deploy to Heroku](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/maxlestage/Apertis)
 
-Paquets et ses paquets (Vitesse, Securite, Memoire, Active) sont des dépôts privés : Heroku a besoin
-d'un jeton GitHub pour les télécharger pendant la compilation.
-
-1. **Créer le jeton** (navigateur du téléphone, github.com) : *Settings → Developer settings →
-   Personal access tokens → Fine-grained tokens → Generate new token*. *Repository access* : les dépôts
-   Paquets, Vitesse, Securite, Memoire et Active ; *Permissions → Contents* : *Read-only*. Copiez-le.
-2. **Déployer** : touchez le bouton *Deploy to Heroku* ci-dessus (ou ouvrez
-   `https://heroku.com/deploy?template=https://github.com/maxlestage/Apertis`). Choisissez un nom,
-   collez le jeton dans `REPOS_TOKEN`, touchez **Deploy app**. Heroku lit [`app.json`](app.json),
-   ajoute une base PostgreSQL (pour la liste d'attente) et compile le site avec le buildpack Rust
-   ([`RustConfig`](RustConfig), [`heroku-build.sh`](heroku-build.sh), [`Procfile`](Procfile)).
-   La première compilation prend 10 à 20 minutes. Touchez ensuite **View**.
-3. **Déploiements automatiques** (facultatif) : sur GitHub, *Settings → Secrets and variables →
-   Actions*, ajoutez les secrets `HEROKU_API_KEY` (Heroku → *Account settings* → *API Key*) et
-   `REPOS_TOKEN`, et la variable `HEROKU_APP_NAME`. Chaque commit sur `master` qui touche le site est
-   alors redéployé par [`.github/workflows/heroku.yml`](.github/workflows/heroku.yml) ; on peut aussi le
-   lancer à la main depuis l'onglet *Actions* de l'app GitHub (*Run workflow*).
+1. **Déployer** : touchez le bouton *Deploy to Heroku* ci-dessus (ou ouvrez
+   `https://heroku.com/deploy?template=https://github.com/maxlestage/Apertis`), choisissez un nom et
+   touchez **Deploy app**. Heroku lit [`app.json`](app.json), ajoute une base PostgreSQL (pour la liste
+   d'attente) et compile le site avec le buildpack Rust ([`RustConfig`](RustConfig),
+   [`heroku-build.sh`](heroku-build.sh), [`Procfile`](Procfile)). La première compilation prend 10 à
+   20 minutes. Touchez ensuite **View**.
+2. **Déploiements automatiques** (facultatif) : sur GitHub, *Settings → Secrets and variables →
+   Actions*, ajoutez le secret `HEROKU_API_KEY` (Heroku → *Account settings* → *API Key*) et la
+   variable `HEROKU_APP_NAME`. Chaque commit sur `master` qui touche le site est alors redéployé par
+   [`.github/workflows/heroku.yml`](.github/workflows/heroku.yml) ; on peut aussi le lancer à la main
+   depuis l'onglet *Actions* de l'app GitHub (*Run workflow*).
 
 Coût : Heroku n'a pas d'offre gratuite (dyno Eco ≈ 5 $/mois, Postgres Essential-0 ≈ 5 $/mois).
 Pour consulter la liste d'attente : Heroku → l'application → *Resources* → *Heroku Postgres* →
