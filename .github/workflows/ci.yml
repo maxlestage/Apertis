@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  core:
+    name: ApertisCore (Linux)
+    runs-on: ubuntu-latest
+    container: swift:6.1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tests du cœur
+        run: swift test --package-path Packages/ApertisCore
+
+  ios:
+    name: Application iOS (Xcode)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Générer le projet Xcode
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Compiler pour le simulateur
+        run: |
+          xcodebuild build \
+            -project Apertis.xcodeproj \
+            -scheme Apertis \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            -quiet
+      - name: Tests du cœur (macOS)
+        run: swift test --package-path Packages/ApertisCore

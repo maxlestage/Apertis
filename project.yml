@@ -1,0 +1,58 @@
+# Projet Xcode généré par XcodeGen : `brew install xcodegen && xcodegen generate`
+name: Apertis
+options:
+  bundleIdPrefix: fr.apertis
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+packages:
+  ApertisCore:
+    path: Packages/ApertisCore
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  Apertis:
+    type: application
+    platform: iOS
+    sources:
+      - path: Apertis
+    dependencies:
+      - package: ApertisCore
+    info:
+      path: Apertis/Info.plist
+      properties:
+        CFBundleDisplayName: Apertis
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen: {}
+        UIRequiresFullScreen: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        NSCameraUsageDescription: Apertis utilise la caméra pour prendre des photos et filmer.
+        NSMicrophoneUsageDescription: Apertis utilise le micro pour enregistrer le son de vos vidéos.
+        NSPhotoLibraryUsageDescription: Apertis importe vos photos et vidéos pour les retoucher.
+        NSPhotoLibraryAddUsageDescription: Apertis enregistre vos prises de vue et vos exports dans Photos.
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: fr.apertis.app
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_PREVIEWS: YES
+schemes:
+  Apertis:
+    build:
+      targets:
+        Apertis: all
+    test:
+      targets:
+        - package: ApertisCore/ApertisCoreTests
