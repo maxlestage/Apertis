@@ -12,6 +12,10 @@ use web_sys::{Document, Element, EventTarget, HtmlElement, Window};
 #[wasm_bindgen(start)]
 pub fn start() {
     paquets::hydrate(&crate::ISLANDS);
+    // Signale au filet de sécurité de la page que le code a bien démarré.
+    if let Some(root) = query("[data-lab]") {
+        toggle_class(&root, "ready", true);
+    }
     if let Some(root) = query("[data-lab=photo]") {
         photo::init(root);
     }
