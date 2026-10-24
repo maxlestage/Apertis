@@ -11,9 +11,13 @@ static float apertisHash(float2 p) {
     return fract((p.x + p.y) * p.x);
 }
 
+// Noyau Core Image classique (compilé avec -fcikernel) : il ne dépend pas de la version de
+// CoreImage.metallib du SDK et fonctionne donc dès iOS 17.
+extern "C" { namespace coreimage {
+
 // frame : origine (x, y) et taille (z, w) de l'image de sortie, en pixels.
-[[stitchable]] float4 apertisEffects(coreimage::sample_t s, float4 frame, float vignette, float grain,
-                                     float grainSize, float clip, coreimage::destination dest) {
+float4 apertisEffects(sample_t s, float4 frame, float vignette, float grain, float grainSize, float clip,
+                      destination dest) {
     float3 c = clamp(s.rgb, 0.0, 1.0);
     float2 size = frame.zw;
     // Coordonnées de sortie, origine en haut à gauche comme dans le navigateur.
@@ -39,3 +43,5 @@ static float apertisHash(float2 p) {
     }
     return float4(c, 1.0);
 }
+
+}}

@@ -43,6 +43,9 @@ final class GradeRenderer: @unchecked Sendable {
         return try? CIColorKernel(functionName: "apertisEffects", fromMetalLibraryData: data)
     }()
 
+    /// Vrai si le noyau des effets est chargé (vérifié par les tests sur simulateur).
+    var hasEffectsKernel: Bool { effectsKernel != nil }
+
     private init() {
         context = CIContext(options: [
             .workingColorSpace: CGColorSpace(name: CGColorSpace.extendedLinearSRGB)!,
