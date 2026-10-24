@@ -46,7 +46,7 @@ public enum ColorMath {
         let minC = min(c.x, c.y, c.z)
         let l = (maxC + minC) / 2
         let delta = maxC - minC
-        guard delta > 1e-7 else { return (0, 0, l) }
+        guard delta >= 1e-6 else { return (0, 0, l) }
         let s = l > 0.5 ? delta / (2 - maxC - minC) : delta / (maxC + minC)
         var h: Float
         if maxC == c.x {
@@ -62,7 +62,7 @@ public enum ColorMath {
 
     /// TSL → RVB. Teinte en degrés (n'importe quelle valeur, ramenée dans [0, 360)).
     public static func hslToRgb(h: Float, s: Float, l: Float) -> RGB {
-        guard s > 1e-7 else { return RGB(repeating: l) }
+        guard s >= 1e-6 else { return RGB(repeating: l) }
         var hue = h.truncatingRemainder(dividingBy: 360)
         if hue < 0 { hue += 360 }
         let q = l < 0.5 ? l * (1 + s) : l + s - l * s

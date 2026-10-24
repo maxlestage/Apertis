@@ -19,6 +19,8 @@ targets:
     platform: iOS
     sources:
       - path: Apertis
+        excludes:
+          - "**/*.storekit"
     dependencies:
       - package: ApertisCore
     info:
@@ -48,11 +50,30 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
         ENABLE_PREVIEWS: YES
+        # Noyaux Core Image (Rendering/Effects.metal).
+        MTL_COMPILER_FLAGS: -fcikernel
+        MTLLINKER_FLAGS: -fcikernel
+  ApertisTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: ApertisTests
+    dependencies:
+      - target: Apertis
+      - package: ApertisCore
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: fr.apertis.tests
 schemes:
   Apertis:
     build:
       targets:
         Apertis: all
+    run:
+      # Achats intégrés simulés en local (abonnement Pro mensuel, essai de 7 jours).
+      storeKitConfiguration: Apertis/Store/Apertis.storekit
     test:
       targets:
+        - ApertisTests
         - package: ApertisCore/ApertisCoreTests

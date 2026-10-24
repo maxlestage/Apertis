@@ -30,7 +30,7 @@ final class ColorGradeProcessorTests: XCTestCase {
         var s = DevelopSettings()
         s.contrast = 50
         let p = ColorGradeProcessor(settings: s)
-        let grey = RGB(repeating: ColorMath.middleGrey)
+        let grey = RGB(repeating: 0.46)
         assertClose(p.apply(grey), grey)
         XCTAssertLessThan(p.apply(RGB(repeating: 0.2)).x, 0.2)
         XCTAssertGreaterThan(p.apply(RGB(repeating: 0.7)).x, 0.7)

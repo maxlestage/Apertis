@@ -70,9 +70,10 @@ public struct GradeWheel: Codable, Equatable, Sendable {
 }
 
 public struct ColorGrading: Codable, Equatable, Sendable {
-    public var shadows = GradeWheel()
+    // Teintes par défaut : bleu dans les ombres, chaud dans les hautes lumières (comme le site).
+    public var shadows = GradeWheel(hue: 210)
     public var midtones = GradeWheel()
-    public var highlights = GradeWheel()
+    public var highlights = GradeWheel(hue: 40)
 
     public init() {}
 
@@ -80,9 +81,9 @@ public struct ColorGrading: Codable, Equatable, Sendable {
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        shadows = try c.decodeIfPresent(GradeWheel.self, forKey: .shadows) ?? GradeWheel()
+        shadows = try c.decodeIfPresent(GradeWheel.self, forKey: .shadows) ?? GradeWheel(hue: 210)
         midtones = try c.decodeIfPresent(GradeWheel.self, forKey: .midtones) ?? GradeWheel()
-        highlights = try c.decodeIfPresent(GradeWheel.self, forKey: .highlights) ?? GradeWheel()
+        highlights = try c.decodeIfPresent(GradeWheel.self, forKey: .highlights) ?? GradeWheel(hue: 40)
     }
 }
 
@@ -98,24 +99,40 @@ public struct LUTReference: Codable, Equatable, Sendable {
     }
 }
 
-/// Recadrage normalisé (0 … 1, origine en haut à gauche) et redressement.
+/// Cadrage : format (recadrage centré), quarts de tour, miroir et redressement.
+/// Même modèle que le laboratoire du site, pour que les recettes passent de l'un à l'autre.
 public struct CropSettings: Codable, Equatable, Sendable {
-    public var x: Double = 0
-    public var y: Double = 0
-    public var width: Double = 1
-    public var height: Double = 1
+    /// Formats proposés : libellé, largeur / hauteur (0 = format d'origine).
+    public static let aspects: [(label: String, ratio: Double)] = [
+        ("Original", 0), ("1:1", 1), ("4:5", 0.8), ("3:2", 1.5), ("4:3", 4.0 / 3.0), ("16:9", 16.0 / 9.0), ("9:16", 9.0 / 16.0),
+    ]
+
+    /// Index dans `aspects`.
+    public var aspect: Int = 0
+    /// Quarts de tour dans le sens horaire, 0 … 3.
+    public var rotation: Int = 0
+    /// Miroir horizontal.
+    public var flip: Bool = false
     /// Redressement en degrés, -45 … +45.
     public var angle: Double = 0
 
-    public init(x: Double = 0, y: Double = 0, width: Double = 1, height: Double = 1, angle: Double = 0) {
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = height
+    public init(aspect: Int = 0, rotation: Int = 0, flip: Bool = false, angle: Double = 0) {
+        self.aspect = aspect
+        self.rotation = rotation
+        self.flip = flip
         self.angle = angle
     }
 
     public var isNeutral: Bool { self == CropSettings() }
+
+    /// Décodage tolérant (les clés inconnues ou absentes sont ignorées).
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        aspect = try c.decodeIfPresent(Int.self, forKey: .aspect) ?? 0
+        rotation = try c.decodeIfPresent(Int.self, forKey: .rotation) ?? 0
+        flip = try c.decodeIfPresent(Bool.self, forKey: .flip) ?? false
+        angle = try c.decodeIfPresent(Double.self, forKey: .angle) ?? 0
+    }
 }
 
 /// Ensemble des réglages de développement d'une photo ou d'un plan vidéo.
@@ -140,7 +157,9 @@ public struct DevelopSettings: Codable, Equatable, Sendable {
     public var vibrance: Double = 0
     public var saturation: Double = 0
 
-    // Couleur avancée
+    // Courbes : paramétrique (ombres profondes, tons sombres, tons clairs, hautes lumières,
+    // -100 … +100) et courbes à points par canal.
+    public var parametricCurve: [Double] = [0, 0, 0, 0]
     public var curves = CurveSet()
     public var hsl = HSLAdjustments()
     public var grading = ColorGrading()
@@ -150,6 +169,8 @@ public struct DevelopSettings: Codable, Equatable, Sendable {
     public var fade: Double = 0
     public var vignette: Double = 0
     public var grain: Double = 0
+    /// Taille du grain, 1 … 4.
+    public var grainSize: Double = 1.5
 
     // Détails — 0 … 100
     public var sharpness: Double = 0
@@ -193,15 +214,15 @@ public struct DevelopSettings: Codable, Equatable, Sendable {
             l.intensity = c(l.intensity, 0, 100)
             s.lut = l
         }
+        s.parametricCurve = (0..<4).map { i in c(i < parametricCurve.count ? parametricCurve[i] : 0) }
         s.fade = c(fade, 0, 100)
         s.vignette = c(vignette)
         s.grain = c(grain, 0, 100)
+        s.grainSize = grainSize.isFinite ? min(max(grainSize, 1), 4) : 1.5
         s.sharpness = c(sharpness, 0, 100)
         s.noiseReduction = c(noiseReduction, 0, 100)
-        s.crop.x = c(crop.x, 0, 1)
-        s.crop.y = c(crop.y, 0, 1)
-        s.crop.width = c(crop.width, 0.01, 1 - s.crop.x)
-        s.crop.height = c(crop.height, 0.01, 1 - s.crop.y)
+        s.crop.aspect = min(max(crop.aspect, 0), CropSettings.aspects.count - 1)
+        s.crop.rotation = ((crop.rotation % 4) + 4) % 4
         s.crop.angle = c(crop.angle, -45, 45)
         return s
     }
@@ -221,6 +242,7 @@ public struct DevelopSettings: Codable, Equatable, Sendable {
         blacks = try d(.blacks)
         vibrance = try d(.vibrance)
         saturation = try d(.saturation)
+        parametricCurve = try c.decodeIfPresent([Double].self, forKey: .parametricCurve) ?? [0, 0, 0, 0]
         curves = try c.decodeIfPresent(CurveSet.self, forKey: .curves) ?? CurveSet()
         hsl = try c.decodeIfPresent(HSLAdjustments.self, forKey: .hsl) ?? HSLAdjustments()
         grading = try c.decodeIfPresent(ColorGrading.self, forKey: .grading) ?? ColorGrading()
@@ -228,6 +250,7 @@ public struct DevelopSettings: Codable, Equatable, Sendable {
         fade = try d(.fade)
         vignette = try d(.vignette)
         grain = try d(.grain)
+        grainSize = try c.decodeIfPresent(Double.self, forKey: .grainSize) ?? 1.5
         sharpness = try d(.sharpness)
         noiseReduction = try d(.noiseReduction)
         crop = try c.decodeIfPresent(CropSettings.self, forKey: .crop) ?? CropSettings()

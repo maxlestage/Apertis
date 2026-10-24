@@ -279,7 +279,7 @@ fn pricing() -> Element {
                     "Pro",
                     "4,99 € / mois",
                     "Abonnement mensuel, sans engagement. 7 jours d'essai gratuit.",
-                    &["Développement RAW et ProRAW avancé", "Courbes, TSL, étalonnage, LUT 3D", "Timeline multipiste et étalonnage par plan", "Export HEIF 10 bits, TIFF 16 bits, 4K HDR", "Tous les styles et ceux à venir"],
+                    &["Courbes, TSL, étalonnage, LUT 3D", "Réduction du bruit RAW et ProRAW", "Étalonnage plan par plan et piste musique", "Export HEIF 10 bits et TIFF 16 bits", "Tous les styles et ceux à venir"],
                     true,
                 )),
         )

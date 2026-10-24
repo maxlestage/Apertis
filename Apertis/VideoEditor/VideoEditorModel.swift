@@ -145,14 +145,47 @@ final class VideoEditorModel: ObservableObject {
 
     // MARK: Étalonnage
 
+    /// Étalonnage par plan (Apertis Pro). Sinon, un réglage s'applique à tout le montage.
+    var perClipGrading = true
+
     /// Modification en direct : pas de reconstruction, le compositeur lit la nouvelle valeur.
     func updateGrade(_ clipID: UUID, _ change: (inout DevelopSettings) -> Void) {
-        guard var clip = timeline.clip(clipID) else { return }
-        change(&clip.grade)
+        let targets = perClipGrading ? [clipID] : mainClips.map(\.id)
         var t = project.timeline
-        guard (try? t.update(clip)) != nil else { return }
+        for id in targets {
+            guard var clip = t.clip(id) else { continue }
+            change(&clip.grade)
+            guard (try? t.update(clip)) != nil else { return }
+        }
         project.timeline = t
         grades.set(mainClips)
+        refreshFrame()
+    }
+
+    /// Applique un style au plan (ou au montage), en gardant ce qui est propre au plan.
+    func applyStyle(_ preset: Preset, to clipID: UUID) {
+        updateGrade(clipID) { $0 = preset.apply(to: $0) }
+        commitGrade()
+    }
+
+    /// Format du film (index dans `CropSettings.aspects`), commun à tous les plans : la
+    /// taille de la composition change, elle est donc reconstruite.
+    var filmAspect: Int { mainClips.first?.grade.crop.aspect ?? 0 }
+
+    func setFilmAspect(_ aspect: Int) {
+        let ids = mainClips.map(\.id)
+        edit { t in
+            for id in ids {
+                guard var clip = t.clip(id) else { continue }
+                clip.grade.crop.aspect = aspect
+                try t.update(clip)
+            }
+        }
+    }
+
+    /// Avant / après : le montage sans étalonnage tant que `on` est vrai.
+    func showOriginal(_ on: Bool) {
+        grades.setBypass(on)
         refreshFrame()
     }
 
