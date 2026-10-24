@@ -1,0 +1,67 @@
+{
+  "identifier" : "A7E2C1D4",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+
+  ],
+  "settings" : {
+    "_applicationInternalID" : "",
+    "_developerTeamID" : "",
+    "_failTransactionsEnabled" : false,
+    "_locale" : "fr_FR",
+    "_storefront" : "FRA",
+    "_storeKitErrors" : [
+
+    ]
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21A6F3B9",
+      "localizations" : [
+        {
+          "description" : "Les outils avancés d'Apertis",
+          "displayName" : "Apertis Pro",
+          "locale" : "fr_FR"
+        }
+      ],
+      "name" : "Apertis Pro",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "4.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6E9B2A10",
+          "introductoryOffer" : {
+            "internalID" : "4C1D8E77",
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P1W"
+          },
+          "localizations" : [
+            {
+              "description" : "Courbes, TSL, étalonnage, LUT 3D, tous les styles, exports 10 et 16 bits",
+              "displayName" : "Apertis Pro mensuel",
+              "locale" : "fr_FR"
+            }
+          ],
+          "productID" : "fr.apertis.pro.mensuel",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Apertis Pro mensuel",
+          "subscriptionGroupID" : "21A6F3B9",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

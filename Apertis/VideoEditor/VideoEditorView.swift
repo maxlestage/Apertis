@@ -6,6 +6,8 @@ import ApertisCore
 
 struct VideoEditorView: View {
     @StateObject private var model: VideoEditorModel
+    @EnvironmentObject private var subscription: Subscription
+    @State private var showingOriginal = false
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var importingMusic = false
     @State private var showExport = false
@@ -32,6 +34,26 @@ struct VideoEditorView: View {
             ZStack {
                 VideoPlayer(player: model.player)
                 if model.isBuilding { ProgressView().tint(.white) }
+                VStack {
+                    HStack {
+                        if showingOriginal {
+                            Text("Avant").font(.caption.bold()).padding(6).background(.ultraThinMaterial, in: Capsule())
+                        }
+                        Spacer()
+                        // Avant / après : maintenir pour voir le montage sans étalonnage.
+                        Image(systemName: "square.split.2x1")
+                            .font(.system(size: 15, weight: .semibold))
+                            .padding(9)
+                            .background(.ultraThinMaterial, in: Circle())
+                            .onLongPressGesture(minimumDuration: 0, maximumDistance: 60, perform: {}, onPressingChanged: { pressing in
+                                showingOriginal = pressing
+                                model.showOriginal(pressing)
+                            })
+                            .accessibilityLabel("Maintenir pour voir l'original")
+                    }
+                    Spacer()
+                }
+                .padding(8)
                 if let progress = model.exportProgress {
                     VStack {
                         ProgressView(value: Double(progress))
@@ -65,13 +87,15 @@ struct VideoEditorView: View {
         }
         .navigationTitle(model.project.name)
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear { model.perClipGrading = subscription.isPro }
+        .onChange(of: subscription.isPro) { _, pro in model.perClipGrading = pro }
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 PhotosPicker(selection: $pickerItems, matching: .videos, preferredItemEncoding: .current) {
                     Image(systemName: "plus.rectangle.on.rectangle")
                 }
                 .accessibilityLabel("Ajouter des vidéos")
-                Button { importingMusic = true } label: { Image(systemName: "music.note") }
+                Button { if subscription.allows(.audioTracks) { importingMusic = true } } label: { Image(systemName: "music.note") }
                     .accessibilityLabel("Ajouter une musique")
                 Button { showExport = true } label: { Image(systemName: "square.and.arrow.up") }
                     .disabled(model.mainClips.isEmpty || model.exportProgress != nil)
@@ -217,52 +241,8 @@ private struct ClipInspector: View {
         }
     }
 
-    private func grade(_ title: String, _ keyPath: WritableKeyPath<DevelopSettings, Double>,
-                       range: ClosedRange<Double> = -100...100, format: String = "%+.0f") -> some View {
-        AdjustmentSlider(title: title,
-                         value: Binding(get: { clip.grade[keyPath: keyPath] },
-                                        set: { value in model.updateGrade(clip.id) { $0[keyPath: keyPath] = value } }),
-                         range: range, format: format) { _ in model.commitGrade() }
-    }
-
     private var gradePanel: some View {
-        VStack(spacing: 12) {
-            grade("Exposition", \.exposure, range: -3...3, format: "%+.2f IL")
-            grade("Contraste", \.contrast)
-            grade("Hautes lumières", \.highlights)
-            grade("Ombres", \.shadows)
-            grade("Température", \.temperature)
-            grade("Teinte", \.tint)
-            grade("Vibrance", \.vibrance)
-            grade("Saturation", \.saturation)
-            grade("Fondu", \.fade, range: 0...100, format: "%.0f")
-            HStack {
-                Text("LUT").font(.footnote)
-                Spacer()
-                Menu(clip.grade.lut.flatMap { ref in LUTLibrary.shared.entries.first { $0.identifier == ref.identifier }?.title } ?? "Aucune") {
-                    Button("Aucune") {
-                        model.updateGrade(clip.id) { $0.lut = nil }
-                        model.commitGrade()
-                    }
-                    ForEach(LUTLibrary.shared.entries) { entry in
-                        Button(entry.title) {
-                            model.updateGrade(clip.id) { $0.lut = LUTReference(identifier: entry.identifier) }
-                            model.commitGrade()
-                        }
-                    }
-                }
-            }
-            if clip.grade.lut != nil {
-                AdjustmentSlider(title: "Intensité LUT",
-                                 value: Binding(get: { clip.grade.lut?.intensity ?? 100 },
-                                                set: { v in model.updateGrade(clip.id) { $0.lut?.intensity = v } }),
-                                 range: 0...100, format: "%.0f") { _ in model.commitGrade() }
-            }
-            Text("Images Log : appliquez la LUT de conversion du fabricant (par exemple Apple Log → Rec. 709) avant vos réglages créatifs. Les LUT s'importent depuis l'éditeur photo.")
-                .font(.caption2).foregroundStyle(.secondary)
-            Button("Appliquer cet étalonnage à tous les plans") { model.applyGradeToAllClips(from: clip.id) }
-                .buttonStyle(.bordered)
-        }
+        ClipGradePanel(model: model, clip: clip)
     }
 
     private var audioPanel: some View {
@@ -310,5 +290,255 @@ private struct TrimControl: View {
         let minimum = 0.1
         if outPoint - inPoint < minimum { outPoint = min(inPoint + minimum, mediaDuration) }
         onCommit(inPoint, outPoint)
+    }
+}
+
+/// Étalonnage d'un plan : les mêmes panneaux que le laboratoire vidéo du site.
+private struct ClipGradePanel: View {
+    @ObservedObject var model: VideoEditorModel
+    @EnvironmentObject private var subscription: Subscription
+    @ObservedObject private var library = StyleLibrary.shared
+    let clip: Clip
+    @State private var section: Pane = .styles
+    @State private var hslRange: HSLRange = .red
+    @State private var gradeZone = 0
+
+    enum Pane: String, CaseIterable, Identifiable {
+        case styles, light, color, curve, hsl, grading, effects, frame
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .styles: return "Styles"
+            case .light: return "Lumière"
+            case .color: return "Couleur"
+            case .curve: return "Courbe"
+            case .hsl: return "TSL"
+            case .grading: return "Étalonnage"
+            case .effects: return "Effets"
+            case .frame: return "Cadrage"
+            }
+        }
+        var proFeature: ProFeature? {
+            switch self {
+            case .curve: return .curves
+            case .hsl: return .hsl
+            case .grading: return .grading
+            default: return nil
+            }
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(Pane.allCases) { item in
+                        Button {
+                            section = item
+                        } label: {
+                            HStack(spacing: 3) {
+                                Text(item.label)
+                                if item.proFeature != nil && !subscription.isPro { Image(systemName: "lock.fill").font(.system(size: 8)) }
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(section == item ? .accentColor : .secondary)
+                        .font(.footnote)
+                    }
+                }
+            }
+            if !subscription.isPro {
+                Label("Réglages appliqués à tout le montage. L'étalonnage plan par plan fait partie d'Apertis Pro.", systemImage: "info.circle")
+                    .font(.caption2).foregroundStyle(.secondary)
+                    .onTapGesture { subscription.requested = .clipGrading }
+            }
+            Group {
+                switch section {
+                case .styles: styles
+                case .light: light
+                case .color: color
+                case .curve: curve
+                case .hsl: hsl
+                case .grading: grading
+                case .effects: effects
+                case .frame: frame
+                }
+            }
+            .modifier(VideoProLock(feature: section.proFeature))
+            if subscription.isPro {
+                Button("Appliquer cet étalonnage à tous les plans") { model.applyGradeToAllClips(from: clip.id) }
+                    .buttonStyle(.bordered)
+            }
+        }
+    }
+
+    private func slider(_ title: String, _ keyPath: WritableKeyPath<DevelopSettings, Double>,
+                        range: ClosedRange<Double> = -100...100, neutral: Double = 0, format: String = "%+.0f") -> some View {
+        AdjustmentSlider(title: title,
+                         value: Binding(get: { clip.grade[keyPath: keyPath] },
+                                        set: { value in model.updateGrade(clip.id) { $0[keyPath: keyPath] = value } }),
+                         range: range, neutral: neutral, format: format) { _ in model.commitGrade() }
+    }
+
+    private var styles: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack {
+                ForEach(BuiltInPresets.all + library.styles) { preset in
+                    let available = subscription.isAvailable(preset)
+                    Button {
+                        if available { model.applyStyle(preset, to: clip.id) } else { subscription.requested = .allStyles }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Text(preset.name)
+                            if !available { Image(systemName: "lock.fill").font(.system(size: 8)) }
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .font(.footnote)
+                }
+            }
+        }
+    }
+
+    private var light: some View {
+        VStack(spacing: 12) {
+            slider("Exposition", \.exposure, range: -5...5, format: "%+.2f IL")
+            slider("Contraste", \.contrast)
+            slider("Hautes lumières", \.highlights)
+            slider("Ombres", \.shadows)
+            slider("Blancs", \.whites)
+            slider("Noirs", \.blacks)
+        }
+    }
+
+    private var color: some View {
+        VStack(spacing: 12) {
+            slider("Température", \.temperature)
+            slider("Teinte", \.tint)
+            slider("Vibrance", \.vibrance)
+            slider("Saturation", \.saturation)
+        }
+    }
+
+    private var curve: some View {
+        let zones = ["Ombres profondes", "Tons sombres", "Tons clairs", "Hautes lumières"]
+        return VStack(spacing: 12) {
+            ForEach(zones.indices, id: \.self) { i in
+                AdjustmentSlider(title: zones[i],
+                                 value: Binding(get: { clip.grade.parametricCurve[i] },
+                                                set: { v in model.updateGrade(clip.id) { $0.parametricCurve[i] = v } })) { _ in model.commitGrade() }
+            }
+        }
+    }
+
+    private var hsl: some View {
+        let range = hslRange
+        func binding(_ field: WritableKeyPath<HSLBand, Double>) -> Binding<Double> {
+            Binding(get: { clip.grade.hsl[range][keyPath: field] },
+                    set: { v in model.updateGrade(clip.id) { $0.hsl[range][keyPath: field] = v } })
+        }
+        return VStack(spacing: 12) {
+            HStack(spacing: 12) {
+                ForEach(HSLRange.allCases, id: \.self) { item in
+                    Circle()
+                        .fill(Color(hue: Double(item.centerHue) / 360, saturation: 0.85, brightness: 0.9))
+                        .frame(width: 26, height: 26)
+                        .overlay(Circle().stroke(Color.primary, lineWidth: item == hslRange ? 2 : 0).padding(-3))
+                        .onTapGesture { hslRange = item }
+                        .accessibilityLabel(item.label)
+                }
+            }
+            Text(range.label).font(.caption.bold())
+            AdjustmentSlider(title: "Teinte", value: binding(\.hue)) { _ in model.commitGrade() }
+            AdjustmentSlider(title: "Saturation", value: binding(\.saturation)) { _ in model.commitGrade() }
+            AdjustmentSlider(title: "Luminance", value: binding(\.luminance)) { _ in model.commitGrade() }
+        }
+    }
+
+    private var grading: some View {
+        let zones: [(String, WritableKeyPath<ColorGrading, GradeWheel>, Double)] = [
+            ("Ombres", \.shadows, 210), ("Tons moyens", \.midtones, 0), ("Hautes lumières", \.highlights, 40),
+        ]
+        let zone = zones[gradeZone]
+        func binding(_ field: WritableKeyPath<GradeWheel, Double>) -> Binding<Double> {
+            Binding(get: { clip.grade.grading[keyPath: zone.1][keyPath: field] },
+                    set: { v in model.updateGrade(clip.id) { $0.grading[keyPath: zone.1][keyPath: field] = v } })
+        }
+        return VStack(spacing: 12) {
+            Picker("Zone", selection: $gradeZone) {
+                ForEach(zones.indices, id: \.self) { Text(zones[$0].0).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            AdjustmentSlider(title: "Teinte", value: binding(\.hue), range: 0...360, neutral: zone.2, format: "%.0f°") { _ in model.commitGrade() }
+            AdjustmentSlider(title: "Intensité", value: binding(\.saturation), range: 0...100, format: "%.0f") { _ in model.commitGrade() }
+            AdjustmentSlider(title: "Luminosité", value: binding(\.luminance)) { _ in model.commitGrade() }
+            slider("Fondu", \.fade, range: 0...100, format: "%.0f")
+        }
+    }
+
+    private var effects: some View {
+        VStack(spacing: 12) {
+            slider("Fondu", \.fade, range: 0...100, format: "%.0f")
+            slider("Grain", \.grain, range: 0...100, format: "%.0f")
+            slider("Taille du grain", \.grainSize, range: 1...4, neutral: 1.5, format: "%.1f")
+            slider("Vignette", \.vignette)
+            slider("Netteté", \.sharpness, range: 0...100, format: "%.0f")
+            lut.proLocked(.lut)
+        }
+    }
+
+    private var lut: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Text("LUT").font(.footnote)
+                Spacer()
+                Menu(clip.grade.lut.flatMap { ref in LUTLibrary.shared.entries.first { $0.identifier == ref.identifier }?.title } ?? "Aucune") {
+                    Button("Aucune") {
+                        model.updateGrade(clip.id) { $0.lut = nil }
+                        model.commitGrade()
+                    }
+                    ForEach(LUTLibrary.shared.entries) { entry in
+                        Button(entry.title) {
+                            model.updateGrade(clip.id) { $0.lut = LUTReference(identifier: entry.identifier) }
+                            model.commitGrade()
+                        }
+                    }
+                }
+            }
+            if clip.grade.lut != nil {
+                AdjustmentSlider(title: "Intensité LUT",
+                                 value: Binding(get: { clip.grade.lut?.intensity ?? 100 },
+                                                set: { v in model.updateGrade(clip.id) { $0.lut?.intensity = v } }),
+                                 range: 0...100, format: "%.0f") { _ in model.commitGrade() }
+            }
+            Text("Images Log : appliquez la LUT de conversion du fabricant (par exemple Apple Log → Rec. 709) avant vos réglages créatifs. Les LUT s'importent depuis l'éditeur photo.")
+                .font(.caption2).foregroundStyle(.secondary)
+        }
+    }
+
+    private var frame: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Format du film").font(.footnote.bold())
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack {
+                    ForEach(CropSettings.aspects.indices, id: \.self) { i in
+                        Button(CropSettings.aspects[i].label) { model.setFilmAspect(i) }
+                            .buttonStyle(.bordered)
+                            .tint(model.filmAspect == i ? .accentColor : .secondary)
+                    }
+                }
+            }
+            AdjustmentSlider(title: "Redresser",
+                             value: Binding(get: { clip.grade.crop.angle }, set: { v in model.updateGrade(clip.id) { $0.crop.angle = v } }),
+                             range: -45...45, format: "%+.1f°") { _ in model.commitGrade() }
+        }
+    }
+}
+
+private struct VideoProLock: ViewModifier {
+    let feature: ProFeature?
+
+    func body(content: Content) -> some View {
+        if let feature { content.proLocked(feature) } else { content }
     }
 }

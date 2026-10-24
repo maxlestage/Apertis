@@ -252,19 +252,19 @@ final class ArrangeAndPresetTests: XCTestCase {
         base.temperature = 12
         base.crop.angle = 3
         base.contrast = 50
-        let styled = BuiltInPresets.blackAndWhite.apply(to: base)
+        let styled = BuiltInPresets.nb.apply(to: base)
         XCTAssertEqual(styled.exposure, 0.8)
         XCTAssertEqual(styled.temperature, 12)
         XCTAssertEqual(styled.crop.angle, 3)
         XCTAssertEqual(styled.saturation, -100)
-        XCTAssertEqual(styled.contrast, BuiltInPresets.blackAndWhite.settings.contrast)
+        XCTAssertEqual(styled.contrast, BuiltInPresets.nb.settings.contrast)
     }
 
     func testBuiltInPresetsAreValidAndDistinct() {
         XCTAssertEqual(Set(BuiltInPresets.all.map(\.id)).count, BuiltInPresets.all.count)
         for preset in BuiltInPresets.all {
             XCTAssertEqual(preset.settings, preset.settings.clamped(), preset.name)
-            XCTAssertFalse(ColorGradeProcessor(settings: preset.settings).isIdentity, preset.name)
+            XCTAssertEqual(ColorGradeProcessor(settings: preset.settings).isIdentity, preset.id == "builtin.original", preset.name)
         }
     }
 }

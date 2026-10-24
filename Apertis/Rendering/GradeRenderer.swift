@@ -4,13 +4,14 @@ import ApertisCore
 
 /// Applique des `DevelopSettings` à une image Core Image, pour la photo comme pour la vidéo.
 ///
-/// Ordre des opérations :
-/// 1. géométrie (redressement, recadrage)
-/// 2. étape linéaire — balance des blancs et exposition (sauf RAW : faites au dématriçage),
-///    hautes lumières négatives et ombres
-/// 3. étape couleur — `ColorGradeProcessor` cuit dans un cube 3D appliqué sur le GPU
-/// 4. étape spatiale — réduction du bruit (hors RAW), netteté, vignette, grain
+/// Même pipeline que le laboratoire du site, dans le même ordre :
+/// 1. géométrie — quarts de tour, miroir, format, redressement (`FrameGeometry`)
+/// 2. netteté — masque flou 3×3 identique au shader du site
+/// 3. étape linéaire — balance des blancs et exposition (sauf RAW : faites au dématriçage)
+/// 4. étape couleur — `ColorGradeProcessor` cuit dans un cube 3D appliqué sur le GPU
+/// 5. effets — vignette, grain (noyau Metal `apertisEffects`, copie du shader du site)
 ///
+/// La réduction du bruit, propre à l'app, s'insère avant l'étape couleur.
 /// Le moteur est sûr à utiliser depuis plusieurs fils (aperçu, export, rendu vidéo).
 final class GradeRenderer: @unchecked Sendable {
     static let shared = GradeRenderer()
@@ -22,12 +23,25 @@ final class GradeRenderer: @unchecked Sendable {
         case raw
     }
 
+    struct Options {
+        /// Taille du cube de couleur (33 pour l'aperçu, 64 pour l'export).
+        var cubeDimension = 33
+        /// Plus grand côté de l'image en pleine résolution, quand on rend un aperçu réduit :
+        /// le grain garde alors la même taille relative qu'à l'export.
+        var fullResolutionDimension: CGFloat?
+    }
+
     /// Contexte unique (Metal), espace de travail linéaire étendu.
     let context: CIContext
 
     private let lock = NSLock()
     private var cubeCache: [(key: DevelopSettings, dimension: Int, data: Data)] = []
     private let sRGB = CGColorSpace(name: CGColorSpace.sRGB)!
+    private let effectsKernel: CIColorKernel? = {
+        guard let url = Bundle.main.url(forResource: "default", withExtension: "metallib"),
+              let data = try? Data(contentsOf: url) else { return nil }
+        return try? CIColorKernel(functionName: "apertisEffects", fromMetalLibraryData: data)
+    }()
 
     private init() {
         context = CIContext(options: [
@@ -38,9 +52,23 @@ final class GradeRenderer: @unchecked Sendable {
     }
 
     func apply(_ rawSettings: DevelopSettings, to input: CIImage, source: SourceKind, cubeDimension: Int = 33) -> CIImage {
+        apply(rawSettings, to: input, source: source, options: Options(cubeDimension: cubeDimension))
+    }
+
+    func apply(_ rawSettings: DevelopSettings, to input: CIImage, source: SourceKind, options: Options) -> CIImage {
         let s = rawSettings.clamped()
         var image = applyGeometry(s.crop, to: input)
         let extent = image.extent
+
+        if s.sharpness > 0 {
+            // c + k·(c − moyenne des 4 voisins), comme le site.
+            let k = CGFloat(s.sharpness / 100 * 1.6)
+            let f = CIFilter.convolution3X3()
+            f.inputImage = image.clampedToExtent()
+            f.weights = CIVector(values: [0, -k / 4, 0, -k / 4, 1 + k, -k / 4, 0, -k / 4, 0], count: 9)
+            f.bias = 0
+            image = (f.outputImage ?? image).cropped(to: extent)
+        }
 
         // Étape linéaire
         if source == .developed {
@@ -59,55 +87,60 @@ final class GradeRenderer: @unchecked Sendable {
                 f.ev = Float(s.exposure)
                 image = f.outputImage ?? image
             }
-        }
-        if s.highlights < 0 || s.shadows != 0 {
-            let f = CIFilter.highlightShadowAdjust()
-            f.inputImage = image
-            f.highlightAmount = Float(1 + min(s.highlights, 0) / 100)
-            f.shadowAmount = Float(s.shadows / 100)
-            // Rayon proportionnel à l'image : l'aperçu réduit et l'export donnent le même rendu.
-            f.radius = Float(max(extent.width, extent.height) * 0.004)
-            image = f.outputImage ?? image
+            if s.noiseReduction > 0 {
+                let f = CIFilter.noiseReduction()
+                f.inputImage = image
+                f.noiseLevel = Float(s.noiseReduction / 100 * 0.06)
+                f.sharpness = 0.4
+                image = f.outputImage ?? image
+            }
         }
 
         // Étape couleur
-        if let cube = cubeData(for: s, dimension: cubeDimension) {
+        if let cube = cubeData(for: s, dimension: options.cubeDimension) {
             let f = CIFilter.colorCubeWithColorSpace()
             f.inputImage = image
-            f.cubeDimension = Float(cubeDimension)
+            f.cubeDimension = Float(options.cubeDimension)
             f.cubeData = cube
             f.colorSpace = sRGB
             image = f.outputImage ?? image
         }
 
-        // Étape spatiale
-        if source == .developed && s.noiseReduction > 0 {
-            let f = CIFilter.noiseReduction()
-            f.inputImage = image
-            f.noiseLevel = Float(s.noiseReduction / 100 * 0.06)
-            f.sharpness = 0.4
-            image = f.outputImage ?? image
-        }
-        if s.sharpness > 0 {
-            let f = CIFilter.sharpenLuminance()
-            f.inputImage = image
-            f.sharpness = Float(s.sharpness / 100)
-            f.radius = Float(max(1, max(extent.width, extent.height) / 2000))
-            image = f.outputImage ?? image
-        }
-        if s.vignette != 0 {
-            let f = CIFilter.vignetteEffect()
-            f.inputImage = image
-            f.center = CGPoint(x: extent.midX, y: extent.midY)
-            f.radius = Float(hypot(extent.width, extent.height) / 2 * 0.85)
-            f.intensity = Float(s.vignette / 100)
-            f.falloff = 0.6
-            image = f.outputImage ?? image
-        }
-        if s.grain > 0 {
-            image = applyGrain(amount: s.grain / 100, to: image)
+        // Effets, en sRGB encodé comme sur le site.
+        if s.vignette != 0 || s.grain > 0 {
+            image = applyEffects(s, to: image, extent: extent, options: options)
         }
         return image.cropped(to: extent)
+    }
+
+    private func applyEffects(_ s: DevelopSettings, to image: CIImage, extent: CGRect, options: Options) -> CIImage {
+        let longest = max(extent.width, extent.height)
+        let full = options.fullResolutionDimension ?? longest
+        // Taille du grain en pixels de pleine résolution (règle du site), ramenée à l'aperçu.
+        let grainPixels = s.grainSize * max(1, Double(full) / 2400) * Double(longest / max(full, 1))
+        return runEffectsKernel(image, extent: extent, vignette: s.vignette / 100, grain: s.grain / 100,
+                                grainSize: max(grainPixels, 0.5), clip: false)
+    }
+
+    /// Alerte d'écrêtage de l'aperçu : rouge pour les blancs brûlés, bleu pour les noirs bouchés.
+    func clippingOverlay(_ image: CIImage) -> CIImage {
+        runEffectsKernel(image, extent: image.extent, vignette: 0, grain: 0, grainSize: 1, clip: true)
+    }
+
+    private func runEffectsKernel(_ image: CIImage, extent: CGRect, vignette: Double, grain: Double,
+                                  grainSize: Double, clip: Bool) -> CIImage {
+        guard let kernel = effectsKernel else { return image }
+        let encoded = image.applyingFilter("CILinearToSRGBToneCurve")
+        let arguments: [Any] = [
+            encoded,
+            CIVector(x: extent.minX, y: extent.minY, z: extent.width, w: extent.height),
+            Float(vignette),
+            Float(grain),
+            Float(grainSize),
+            Float(clip ? 1 : 0),
+        ]
+        guard let output = kernel.apply(extent: extent, arguments: arguments) else { return image }
+        return output.applyingFilter("CISRGBToneCurveToLinear")
     }
 
     /// Cube de l'étape couleur ; nil si elle est neutre. Mis en cache : un curseur qui ne
@@ -139,51 +172,31 @@ final class GradeRenderer: @unchecked Sendable {
         k.temperature = 0
         k.tint = 0
         k.exposure = 0
-        k.shadows = 0
-        k.highlights = max(s.highlights, 0)
         k.vignette = 0
         k.grain = 0
+        k.grainSize = 1.5
         k.sharpness = 0
         k.noiseReduction = 0
         k.crop = CropSettings()
         return k
     }
 
-    private func applyGeometry(_ crop: CropSettings, to input: CIImage) -> CIImage {
-        var image = input
-        let extent = input.extent
-        if crop.angle != 0 {
-            let f = CIFilter.straighten()
-            f.inputImage = image
-            f.angle = Float(crop.angle * .pi / 180)
-            image = (f.outputImage ?? image).cropped(to: extent)
-        }
-        guard crop.x != 0 || crop.y != 0 || crop.width != 1 || crop.height != 1 else { return image }
-        // Le recadrage est exprimé avec l'origine en haut à gauche ; Core Image a l'origine en bas.
-        let rect = CGRect(x: extent.minX + crop.x * extent.width,
-                          y: extent.minY + (1 - crop.y - crop.height) * extent.height,
-                          width: crop.width * extent.width,
-                          height: crop.height * extent.height).integral
-        return image.cropped(to: rect).transformed(by: CGAffineTransform(translationX: -rect.minX, y: -rect.minY))
+    /// Taille de sortie d'un cadrage pour une source de cette taille.
+    static func outputSize(_ crop: CropSettings, source: CGSize) -> CGSize {
+        let g = FrameGeometry(crop: crop, sourceWidth: source.width, sourceHeight: source.height)
+        return CGSize(width: g.width, height: g.height)
     }
 
-    private func applyGrain(amount: Double, to image: CIImage) -> CIImage {
-        guard let noise = CIFilter.randomGenerator().outputImage else { return image }
-        let extent = image.extent
-        // Grain proportionnel à la taille de l'image, monochrome, centré sur le gris neutre.
-        let scale = max(1, max(extent.width, extent.height) / 1800)
-        let a = CGFloat(amount * 0.35)
-        let mono = CIFilter.colorMatrix()
-        mono.inputImage = noise.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-        mono.rVector = CIVector(x: 0, y: a, z: 0, w: 0)
-        mono.gVector = CIVector(x: 0, y: a, z: 0, w: 0)
-        mono.bVector = CIVector(x: 0, y: a, z: 0, w: 0)
-        mono.aVector = CIVector(x: 0, y: 0, z: 0, w: 0)
-        mono.biasVector = CIVector(x: 0.5 - a / 2, y: 0.5 - a / 2, z: 0.5 - a / 2, w: 1)
-        guard let grain = mono.outputImage?.cropped(to: extent) else { return image }
-        let blend = CIFilter.softLightBlendMode()
-        blend.inputImage = grain
-        blend.backgroundImage = image
-        return blend.outputImage ?? image
+    private func applyGeometry(_ crop: CropSettings, to input: CIImage) -> CIImage {
+        let extent = input.extent
+        let image = input.transformed(by: CGAffineTransform(translationX: -extent.minX, y: -extent.minY))
+        guard !crop.isNeutral else { return image }
+        let g = FrameGeometry(crop: crop, sourceWidth: extent.width, sourceHeight: extent.height)
+        let t = g.sourceToOutput(sourceWidth: extent.width, sourceHeight: extent.height)
+        let transform = CGAffineTransform(a: t.a, b: t.b, c: t.c, d: t.d, tx: t.tx, ty: t.ty)
+        // Bords prolongés : l'interpolation ne fait pas entrer de pixels transparents.
+        return image.clampedToExtent()
+            .transformed(by: transform, highQualityDownsample: true)
+            .cropped(to: CGRect(x: 0, y: 0, width: g.width, height: g.height))
     }
 }
