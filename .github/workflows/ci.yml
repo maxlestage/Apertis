@@ -14,6 +14,31 @@ jobs:
       - name: Tests du cœur
         run: swift test --package-path Packages/ApertisCore
 
+  site:
+    name: Site web (Rust, Paquets)
+    runs-on: ubuntu-latest
+    env:
+      # Paquets et ses paquets sont privés : git lit le jeton REPOS_TOKEN.
+      REPOS_TOKEN: ${{ secrets.REPOS_TOKEN }}
+      CARGO_NET_GIT_FETCH_WITH_CLI: true
+      GIT_CONFIG_COUNT: ${{ secrets.REPOS_TOKEN != '' && 1 || 0 }}
+      GIT_CONFIG_KEY_0: credential.https://github.com.helper
+      GIT_CONFIG_VALUE_0: '!f() { test "$1" = get && echo username=x-access-token && echo "password=$REPOS_TOKEN"; }; f'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tests du site
+        run: |
+          if [ -z "$REPOS_TOKEN" ]; then
+            echo "::notice::Secret REPOS_TOKEN absent : tests du site sautés (les dépendances Paquets sont privées)."
+            exit 0
+          fi
+          cargo test -p apertis-site
+      - name: Îlots (WebAssembly)
+        run: |
+          [ -z "$REPOS_TOKEN" ] && exit 0
+          rustup target add wasm32-unknown-unknown
+          cargo build -p apertis-site --lib --target wasm32-unknown-unknown --profile wasm-release
+
   ios:
     name: Application iOS (Xcode)
     runs-on: macos-15

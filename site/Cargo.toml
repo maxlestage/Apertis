@@ -1,0 +1,26 @@
+[package]
+name = "apertis-site"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Le site d'Apertis, écrit avec Paquets."
+
+# Une crate, deux cibles : le serveur (src/main.rs) et, compilés en WebAssembly,
+# les îlots de src/lib.rs.
+[lib]
+name = "apertis_site"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "apertis-site"
+path = "src/main.rs"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+paquets = { git = "https://github.com/maxlestage/Paquets" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+paquets = { git = "https://github.com/maxlestage/Paquets", default-features = false, features = ["client"] }
+wasm-bindgen = "0.2"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

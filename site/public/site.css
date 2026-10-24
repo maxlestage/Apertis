@@ -1,0 +1,68 @@
+/* Le thème d'Apertis, par-dessus le thème intégré de Paquets (chargé après :
+   `html:root` l'emporte sur son `:root`). */
+html:root {
+  color-scheme: dark;
+  --bg: #0b0b10;
+  --fg: #f2f1f7;
+  --muted: #a3a1b5;
+  --line: #24232f;
+  --card: #13131b;
+  --accent: #ff7a59;
+  --accent-fg: #14080a;
+  --glow: linear-gradient(120deg, #ffb347, #ff5e62 45%, #6d4aff);
+}
+
+body { max-width: 68rem; }
+
+header { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(12px); padding-top: .8rem; }
+header nav { gap: .4rem 1.1rem; font-size: .95rem; }
+header nav .button { padding: .45em 1em; color: var(--accent-fg); }
+@media (max-width: 640px) {
+  header { flex-wrap: nowrap; }
+  header nav a:not(.button) { display: none; }
+}
+.brand { display: inline-flex; align-items: center; gap: .55rem; color: inherit; text-decoration: none; font-size: 1.15rem; }
+
+.hero { padding-top: clamp(2rem, 9vw, 7rem); }
+.hero h1 { font-size: clamp(2.2rem, 6.5vw, 4.2rem); max-width: 18ch; margin-inline: auto; background: var(--glow); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.center-row { justify-content: center; margin-top: 2rem; }
+.eyebrow { text-transform: uppercase; letter-spacing: .14em; font-size: .78rem; font-weight: 700; color: var(--accent); margin-bottom: .6rem; }
+
+.section-head { margin: clamp(4rem, 10vw, 7rem) 0 1.6rem; scroll-margin-top: 5rem; max-width: 46rem; }
+.section-head h2 { font-size: clamp(1.7rem, 4vw, 2.4rem); margin-top: 0; }
+
+.feature .icon { font-size: 1.7rem; }
+.feature h3 { margin: .5rem 0 .6rem; }
+.feature ul { padding-left: 1.1rem; margin: 0; color: var(--muted); }
+.feature li + li { margin-top: .35rem; }
+
+/* Labo : démonstration interactive */
+.labo { display: grid; gap: 1.5rem; grid-template-columns: minmax(0, 3fr) minmax(16rem, 2fr); align-items: start; }
+@media (max-width: 760px) { .labo { grid-template-columns: 1fr; } }
+.labo-frame { position: relative; aspect-ratio: 3 / 2; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); }
+.labo-controls { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 1.2rem 1.4rem; }
+.labo-slider { display: block; font-weight: 500; margin: 0; }
+.labo-label { justify-content: space-between; font-size: .92rem; }
+.labo-slider input[type=range] { padding: 0; border: 0; background: none; accent-color: var(--accent); }
+.labo-controls .row button { padding: .45em .9em; font-size: .85rem; }
+
+.scene { position: absolute; inset: 0; }
+.scene .sky { position: absolute; inset: 0; background: linear-gradient(180deg, #2b4c8c 0%, #e98b6d 55%, #f6c48e 70%); }
+.scene .sun { position: absolute; width: 18%; aspect-ratio: 1; left: 58%; top: 34%; border-radius: 50%; background: radial-gradient(circle, #fff6d5 0 40%, #ffd27a 60%, transparent 72%); }
+.scene .mountain { position: absolute; inset: 0; }
+.scene .far { background: #6b4f7a; clip-path: polygon(0 62%, 18% 44%, 33% 56%, 52% 38%, 70% 55%, 86% 42%, 100% 52%, 100% 100%, 0 100%); }
+.scene .near { background: #2a2140; clip-path: polygon(0 72%, 22% 58%, 40% 70%, 60% 60%, 78% 74%, 100% 64%, 100% 100%, 0 100%); }
+.scene .lake { position: absolute; left: 0; right: 0; bottom: 0; height: 22%; background: linear-gradient(180deg, #3b5d97, #1a2747); }
+.scene.before { filter: none; }
+.divider { position: absolute; top: 0; bottom: 0; width: 2px; background: #fff; box-shadow: 0 0 12px rgba(0,0,0,.5); transform: translateX(-1px); }
+.tag { position: absolute; top: .7rem; font-size: .75rem; font-weight: 700; padding: .2em .6em; border-radius: 999px; background: rgba(0,0,0,.55); color: #fff; }
+.tag.left { left: .7rem; }
+.tag.right { right: .7rem; }
+
+/* Liste d'attente */
+.waitlist { margin-top: clamp(4rem, 10vw, 7rem); scroll-margin-top: 5rem; text-align: center; }
+.waitlist form { max-width: 30rem; margin-inline: auto; justify-content: center; }
+.notice { font-weight: 600; }
+.notice.ok { color: #6ee7a8; }
+.notice.err { color: #ff8a8a; }
+.hidden { display: none; }

@@ -1,0 +1,18 @@
+# Espace de travail Cargo : le site web d'Apertis (site/), écrit avec Paquets.
+# L'application iOS (Swift) n'en fait pas partie. Ce fichier à la racine permet aussi
+# au buildpack Rust de Heroku de reconnaître le dépôt.
+[workspace]
+members = ["site"]
+resolver = "3"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+
+# Le bundle du navigateur : le plus petit possible.
+[profile.wasm-release]
+inherits = "release"
+opt-level = "s"
+lto = true
+panic = "abort"
