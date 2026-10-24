@@ -58,19 +58,24 @@ pub async fn export(out: &Path, base: &str, site_url: Option<String>) -> io::Res
         Ok(())
     };
 
+    // Version du bundle dans ses adresses : un navigateur ne peut pas mélanger le
+    // JavaScript d'un déploiement et le WebAssembly d'un autre (GitHub Pages met ces
+    // fichiers en cache 10 minutes).
+    let version = bundle_version(&dir.join("pkg"));
+    let finish = |html: &str| with_version(&with_base(html, &base), &version);
     for (path, file) in PAGES {
         let res = client.get(path).await;
         if res.status() != 200 {
             return Err(io::Error::other(format!("GET {path} : {}", res.status())));
         }
-        write(file, with_base(&res.text(), &base).as_bytes())?;
+        write(file, finish(&res.text()).as_bytes())?;
     }
     // Page introuvable : GitHub Pages sert 404.html pour toute adresse inconnue.
     let missing = client.get("/introuvable").await;
     if missing.status() != 404 {
         return Err(io::Error::other(format!("page 404 : {}", missing.status())));
     }
-    write("404.html", with_base(&missing.text(), &base).as_bytes())?;
+    write("404.html", finish(&missing.text()).as_bytes())?;
 
     for folder in ["public", "pkg"] {
         let root = dir.join(folder);
@@ -88,6 +93,23 @@ pub async fn export(out: &Path, base: &str, site_url: Option<String>) -> io::Res
     // Sans ce fichier, GitHub Pages passerait le site dans Jekyll.
     write(".nojekyll", b"")?;
     Ok(written)
+}
+
+/// Empreinte courte des fichiers du bundle (FNV-1a).
+fn bundle_version(pkg: &Path) -> String {
+    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+    for file in files(pkg) {
+        for byte in std::fs::read(&file).unwrap_or_default() {
+            hash = (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3);
+        }
+    }
+    format!("{hash:016x}")[..10].to_owned()
+}
+
+/// Ajoute `?v=<version>` aux adresses du bundle (`….js"` et `…_bg.wasm"`).
+pub fn with_version(html: &str, version: &str) -> String {
+    html.replace("/pkg/apertis_site.js\"", &format!("/pkg/apertis_site.js?v={version}\""))
+        .replace("/pkg/apertis_site_bg.wasm\"", &format!("/pkg/apertis_site_bg.wasm?v={version}\""))
 }
 
 /// `""`, ou `/quelque-chose` sans barre finale.
@@ -176,6 +198,8 @@ mod tests {
             assert!(out.contains(expected), "{expected} absent de {out}");
         }
         assert_eq!(with_base(html, ""), html);
+        let versioned = with_version(r#"<link href="/A/pkg/apertis_site.js"/>import init from "/A/pkg/apertis_site.js";init({module_or_path:"/A/pkg/apertis_site_bg.wasm"})"#, "abc");
+        assert_eq!(versioned.matches("?v=abc\"").count(), 3);
         assert_eq!(normalize_base("Apertis/"), "/Apertis");
         assert_eq!(normalize_base(""), "");
     }

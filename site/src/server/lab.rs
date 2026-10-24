@@ -7,6 +7,10 @@ use super::layout::{icon, page, Meta};
 use crate::grade::{Control, Group, Settings, Unit, ASPECTS, COLOR, CURVE, EFFECTS, GRADE_ZONES, HSL_BANDS, LIGHT, PRESETS};
 use crate::boot;
 
+/// Filet de sécurité : si le code du laboratoire n'a pas démarré (réseau, cache du
+/// navigateur, navigateur trop ancien), un message propose de recharger la page.
+const WATCHDOG: &str = r#"<script>setTimeout(function(){var l=document.querySelector("[data-lab]");if(!l||l.classList.contains("ready"))return;var m=document.getElementById("lab-message");if(!m)return;m.innerHTML='Le laboratoire n\'a pas pu démarrer. <a class="btn btn-small" href="">Recharger</a>';m.hidden=false;var b=document.getElementById("lab-busy");if(b)b.hidden=true;},10000);</script>"#;
+
 /// Message affiché sans JavaScript.
 fn client_note() -> Element {
     noscript().child(p().class("lab-message").text("Le laboratoire fonctionne dans le navigateur : activez JavaScript pour l'utiliser."))
@@ -393,6 +397,7 @@ pub fn photo_page(req: &Request) -> Page {
         },
         content,
     )
+    .head(WATCHDOG)
 }
 
 pub fn video_page(req: &Request) -> Page {
@@ -506,4 +511,5 @@ pub fn video_page(req: &Request) -> Page {
         },
         content,
     )
+    .head(WATCHDOG)
 }
