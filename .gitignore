@@ -10,3 +10,4 @@ xcuserdata/
 /site/target/
 /site/pkg/
 *.db
+/site/Cargo.lock
