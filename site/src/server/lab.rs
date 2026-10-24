@@ -182,6 +182,57 @@ fn tool_button(action: &str, label: &str, icon_name: &str, class: &str) -> Eleme
         .child(icon(icon_name))
 }
 
+/// Bouton de barre d'outils avec un libellé court, affiché sous l'icône sur téléphone.
+fn labeled_tool(action: &str, label: &str, short: &str, icon_name: &str) -> Element {
+    tool_button(action, label, icon_name, "").child(span().class("tool-label").text(short.to_owned()))
+}
+
+/// Menu « Plus » : les actions occasionnelles, avec leur nom en toutes lettres.
+fn more_menu(items: &[(&str, &str, &str)]) -> Element {
+    details()
+        .class("more")
+        .child(
+            summary()
+                .class("tool")
+                .attr("aria-label", "Plus d'actions")
+                .attr("title", "Plus d'actions")
+                .child(icon("more"))
+                .child(span().class("tool-label").text("Plus")),
+        )
+        .child(div().class("more-panel").children(items.iter().map(|(action, label, icon_name)| {
+            button()
+                .attr("type", "button")
+                .class("menu-item")
+                .attr("data-action", (*action).to_owned())
+                .child(icon(icon_name))
+                .child(span().text((*label).to_owned()))
+        })))
+}
+
+fn export_button() -> Element {
+    button()
+        .attr("type", "button")
+        .attr("data-action", "export")
+        .class("btn btn-small btn-export")
+        .attr("aria-label", "Exporter")
+        .child(icon("download"))
+        .child(span().class("long").text("Exporter"))
+        .child(span().class("tool-label").text("Exporter"))
+}
+
+/// Légende de l'alerte d'écrêtage, visible tant qu'elle est active.
+fn clip_legend() -> Element {
+    div()
+        .class("clip-legend")
+        .attr("id", "lab-clip-legend")
+        .attr("hidden", "")
+        .child(span().class("swatch-red"))
+        .child(span().text("blancs brûlés"))
+        .child(span().class("swatch-blue"))
+        .child(span().text("noirs bouchés"))
+        .child(button().attr("type", "button").attr("data-action", "clip").class("clip-off").text("Masquer"))
+}
+
 fn styles_panel(thumbnails: bool) -> Element {
     div()
         .class("panel")
@@ -239,7 +290,8 @@ fn stage(extra: Option<Element>) -> Element {
         .child(div().class("lab-busy").attr("id", "lab-busy").attr("hidden", "").child(span().class("spinner")).child(span().text("Chargement…")))
         .child(div().class("lab-message").attr("id", "lab-message").attr("role", "alert").attr("hidden", ""))
         .child(div().class("lab-toast").attr("id", "lab-toast").attr("role", "status").attr("hidden", ""))
-        .child(div().class("lab-status mono").child(span().attr("id", "lab-info").text("Aucun fichier")));
+        .child(div().class("lab-status mono").child(span().attr("id", "lab-info").text("Aucun fichier")))
+        .child(clip_legend());
     if let Some(extra) = extra {
         stage = stage.child(extra);
     }
@@ -253,7 +305,7 @@ pub fn photo_page(req: &Request) -> Page {
         .child(
             div()
                 .class("tool-group")
-                .child(button().attr("type", "button").attr("data-action", "open").class("btn btn-small").child(icon("upload")).child(span().text("Ouvrir une photo")))
+                .child(button().attr("type", "button").attr("data-action", "open").class("btn btn-small btn-open").attr("aria-label", "Ouvrir une photo").child(icon("upload")).child(span().class("long").text("Ouvrir une photo")).child(span().class("tool-label").text("Ouvrir")))
                 .child(input().attr("type", "file").attr("id", "lab-file").attr("accept", "image/*").attr("hidden", ""))
                 .child(input().attr("type", "file").attr("id", "lab-recipe-file").attr("accept", "application/json,.json").attr("hidden", ""))
                 .child(div().class("samples").attr("aria-label", "Exemples").children(samples.iter().map(|(file, name)| {
@@ -269,18 +321,20 @@ pub fn photo_page(req: &Request) -> Page {
         .child(
             div()
                 .class("tool-group")
-                .child(tool_button("undo", "Annuler (⌘Z)", "undo", "").attr("disabled", ""))
-                .child(tool_button("redo", "Rétablir (⇧⌘Z)", "redo", "").attr("disabled", ""))
-                .child(tool_button("reset", "Tout réinitialiser", "reset", ""))
-                .child(tool_button("before", "Maintenir pour voir l'original (touche B)", "compare", ""))
-                .child(tool_button("clip", "Alerte d'écrêtage", "warning", "")),
+                .child(labeled_tool("undo", "Annuler (⌘Z)", "Annuler", "undo").attr("disabled", ""))
+                .child(labeled_tool("redo", "Rétablir (⇧⌘Z)", "Rétablir", "redo").attr("disabled", ""))
+                .child(labeled_tool("before", "Maintenir pour voir l'original (touche B)", "Avant", "compare")),
         )
         .child(
             div()
                 .class("tool-group")
-                .child(tool_button("recipe-load", "Charger une recette (.json)", "file", ""))
-                .child(tool_button("recipe-save", "Enregistrer la recette (.json)", "download", ""))
-                .child(button().attr("type", "button").attr("data-action", "export").class("btn btn-small").child(icon("download")).child(span().text("Exporter"))),
+                .child(more_menu(&[
+                    ("reset", "Tout réinitialiser", "reset"),
+                    ("clip", "Alerte d'écrêtage", "warning"),
+                    ("recipe-load", "Charger une recette (.json)", "file"),
+                    ("recipe-save", "Enregistrer la recette (.json)", "download"),
+                ]))
+                .child(export_button()),
         );
 
     let dialog = dialog()
@@ -347,21 +401,20 @@ pub fn video_page(req: &Request) -> Page {
         .child(
             div()
                 .class("tool-group")
-                .child(button().attr("type", "button").attr("data-action", "open").class("btn btn-small").child(icon("upload")).child(span().text("Ouvrir une vidéo")))
+                .child(button().attr("type", "button").attr("data-action", "open").class("btn btn-small btn-open").attr("aria-label", "Ouvrir une vidéo").child(icon("upload")).child(span().class("long").text("Ouvrir une vidéo")).child(span().class("tool-label").text("Ouvrir")))
                 .child(input().attr("type", "file").attr("id", "video-file").attr("accept", "video/*").attr("hidden", "")),
         )
         .child(
             div()
                 .class("tool-group")
-                .child(tool_button("reset", "Tout réinitialiser", "reset", ""))
-                .child(tool_button("before", "Maintenir pour voir l'original", "compare", ""))
-                .child(tool_button("clip", "Alerte d'écrêtage", "warning", ""))
-                .child(tool_button("mute", "Couper le son", "volume", "")),
+                .child(labeled_tool("before", "Maintenir pour voir l'original", "Avant", "compare"))
+                .child(labeled_tool("mute", "Couper le son", "Son", "volume")),
         )
         .child(
             div()
                 .class("tool-group")
-                .child(button().attr("type", "button").attr("data-action", "export").class("btn btn-small").child(icon("download")).child(span().text("Exporter"))),
+                .child(more_menu(&[("reset", "Tout réinitialiser", "reset"), ("clip", "Alerte d'écrêtage", "warning")]))
+                .child(export_button()),
         );
 
     let transport = div()
@@ -383,8 +436,8 @@ pub fn video_page(req: &Request) -> Page {
         .child(
             div()
                 .class("transport-row")
-                .child(button().attr("type", "button").class("chip").attr("data-action", "mark-in").text("[ Entrée"))
-                .child(button().attr("type", "button").class("chip").attr("data-action", "mark-out").text("Sortie ]"))
+                .child(button().attr("type", "button").class("chip").attr("data-action", "mark-in").text("Entrée"))
+                .child(button().attr("type", "button").class("chip").attr("data-action", "mark-out").text("Sortie"))
                 .child(button().attr("type", "button").class("chip").attr("data-action", "clear-range").text("Tout"))
                 .child(span().class("mono muted range-text").attr("id", "video-range")),
         );

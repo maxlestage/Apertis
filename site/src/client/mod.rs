@@ -18,6 +18,15 @@ pub fn start() {
     if let Some(root) = query("[data-lab=video]") {
         video::init(root);
     }
+    // Un toucher hors du menu « Plus » le referme.
+    on(&document(), "click", |e: web_sys::MouseEvent| {
+        let target = e.target().and_then(|t| t.dyn_into::<web_sys::Node>().ok());
+        for menu in query_all(&document().document_element().expect("html"), "details.more[open]") {
+            if !menu.contains(target.as_ref()) {
+                let _ = menu.remove_attribute("open");
+            }
+        }
+    });
 }
 
 pub fn window() -> Window {
@@ -112,4 +121,21 @@ pub fn take_file(input: &web_sys::HtmlInputElement) -> Option<web_sys::File> {
     let file = input.files()?.get(0);
     input.set_value("");
     file
+}
+
+/// Referme le menu « Plus » qui contient `button`, s'il y en a un.
+pub fn close_menu(button: &Element) {
+    if let Some(menu) = button.closest("details").ok().flatten() {
+        let _ = menu.remove_attribute("open");
+    }
+}
+
+/// Reflète l'état de l'alerte d'écrêtage : boutons et légende.
+pub fn show_clipping(root: &Element, on: bool) {
+    for b in query_all(root, "[data-action=clip]") {
+        toggle_class(&b, "active", on);
+    }
+    if let Some(legend) = document().get_element_by_id("lab-clip-legend") {
+        set_hidden(&legend, !on);
+    }
 }

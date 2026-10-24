@@ -86,6 +86,13 @@ pub fn bind(root: &Element, defaults: Settings, on_input: OnInput, on_commit: On
             for panel in query_all(&root2, "[data-panel]") {
                 super::set_hidden(&panel, panel.get_attribute("data-panel").as_deref() != Some(name.as_str()));
             }
+            // Sur téléphone, si la page a défilé, le nouveau panneau commence sous les onglets.
+            if let (Some(bar), Some(panels)) = (tab2.parent_element(), super::query_in(&root2, ".panels")) {
+                let gap = panels.get_bounding_client_rect().top() - bar.get_bounding_client_rect().bottom();
+                if gap < -1.0 {
+                    super::window().scroll_by_with_x_and_y(0.0, gap);
+                }
+            }
         });
     }
 
