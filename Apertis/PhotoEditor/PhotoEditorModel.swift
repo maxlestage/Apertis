@@ -24,6 +24,9 @@ enum PhotoExportFormat: String, CaseIterable, Identifiable {
     }
 
     var isLossy: Bool { self != .tiff16 }
+
+    /// Formats réservés à Apertis Pro.
+    var isPro: Bool { self == .heif10 || self == .tiff16 }
 }
 
 /// État de l'éditeur photo. Les réglages en cours sont rendus en continu ; une étape
@@ -34,6 +37,14 @@ final class PhotoEditorModel: ObservableObject {
         didSet { if settings != oldValue { scheduleRender() } }
     }
     @Published private(set) var preview: CGImage?
+    /// Histogramme RVB de l'aperçu (256 classes par canal, normalisées) et écrêtage.
+    @Published private(set) var histogram: Histogram?
+    /// Alerte d'écrêtage sur l'aperçu.
+    @Published var showClipping = false {
+        didSet { if showClipping != oldValue { scheduleRender() } }
+    }
+    /// Vignettes des styles, par identifiant, calculées sur l'image en cours.
+    @Published private(set) var styleThumbnails: [String: CGImage] = [:]
     @Published private(set) var original: CGImage?
     @Published private(set) var imageSize: CGSize = .zero
     @Published private(set) var loadError: String?
@@ -73,12 +84,13 @@ final class PhotoEditorModel: ObservableObject {
             do {
                 let source = try PhotoSource(url: url, kind: kind)
                 self.source = source
-                let original = self.render(.neutral, with: source)
-                let preview = self.render(initial, with: source)
+                let original = self.render(.neutral, with: source, clipping: false)
+                let preview = self.render(initial, with: source, clipping: false)
                 DispatchQueue.main.async {
                     self.imageSize = source.size
-                    self.original = original
-                    self.preview = preview
+                    self.original = original?.image
+                    self.preview = preview?.image
+                    self.histogram = preview?.histogram
                 }
             } catch {
                 DispatchQueue.main.async { self.loadError = error.localizedDescription }
@@ -94,10 +106,14 @@ final class PhotoEditorModel: ObservableObject {
         }
         renderInFlight = true
         let snapshot = settings
+        let clipping = showClipping
         renderQueue.async {
-            let image = self.source.flatMap { self.render(snapshot, with: $0) }
+            let result = self.source.flatMap { self.render(snapshot, with: $0, clipping: clipping) }
             DispatchQueue.main.async {
-                if let image { self.preview = image }
+                if let result {
+                    self.preview = result.image
+                    self.histogram = result.histogram
+                }
                 self.renderInFlight = false
                 if self.renderPending {
                     self.renderPending = false
@@ -107,10 +123,34 @@ final class PhotoEditorModel: ObservableObject {
         }
     }
 
-    private func render(_ settings: DevelopSettings, with source: PhotoSource) -> CGImage? {
+    private func render(_ settings: DevelopSettings, with source: PhotoSource, clipping: Bool) -> (image: CGImage, histogram: Histogram?)? {
         guard let image = source.render(settings: settings, maxDimension: previewDimension, cubeDimension: 33) else { return nil }
-        return GradeRenderer.shared.context.createCGImage(image, from: image.extent, format: .RGBA8,
-                                                          colorSpace: CGColorSpace(name: CGColorSpace.displayP3))
+        let context = GradeRenderer.shared.context
+        let shown = clipping ? GradeRenderer.shared.clippingOverlay(image) : image
+        guard let cg = context.createCGImage(shown, from: shown.extent, format: .RGBA8,
+                                             colorSpace: CGColorSpace(name: CGColorSpace.displayP3)) else { return nil }
+        // Histogramme en sRGB, comme le site, sur une version réduite de l'image développée.
+        let scale = min(1, 320 / max(image.extent.width, image.extent.height))
+        let small = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        let histogram = context.createCGImage(small, from: small.extent, format: .RGBA8,
+                                              colorSpace: CGColorSpace(name: CGColorSpace.sRGB)).flatMap(Histogram.init)
+        return (cg, histogram)
+    }
+
+    /// Calcule les vignettes de tous les styles sur l'image en cours.
+    func refreshStyleThumbnails(_ presets: [Preset]) {
+        let base = settings
+        let previewDimension = previewDimension
+        renderQueue.async {
+            guard let source = self.source else { return }
+            for preset in presets {
+                guard let image = source.thumbnail(settings: preset.apply(to: base), previewDimension: previewDimension, dimension: 180),
+                      let cg = GradeRenderer.shared.context.createCGImage(image, from: image.extent, format: .RGBA8,
+                                                                          colorSpace: CGColorSpace(name: CGColorSpace.displayP3))
+                else { continue }
+                DispatchQueue.main.async { self.styleThumbnails[preset.id] = cg }
+            }
+        }
     }
 
     // MARK: Historique
@@ -154,27 +194,42 @@ final class PhotoEditorModel: ObservableObject {
         objectWillChange.send()
     }
 
-    /// Recadrage centré au rapport largeur/hauteur demandé (nil = image entière).
-    func setAspectRatio(_ ratio: Double?) {
-        var crop = settings.crop
-        guard let ratio, imageSize.width > 0 else {
-            crop.x = 0; crop.y = 0; crop.width = 1; crop.height = 1
-            settings.crop = crop
-            commit("Recadrage")
-            return
-        }
-        let imageRatio = Double(imageSize.width / imageSize.height)
-        if ratio > imageRatio {
-            crop.width = 1
-            crop.height = imageRatio / ratio
-        } else {
-            crop.height = 1
-            crop.width = ratio / imageRatio
-        }
-        crop.x = (1 - crop.width) / 2
-        crop.y = (1 - crop.height) / 2
-        settings.crop = crop
-        commit("Recadrage")
+    // MARK: Cadrage
+
+    /// Format centré, index dans `CropSettings.aspects` (0 = format d'origine).
+    func setAspect(_ index: Int) {
+        settings.crop.aspect = index
+        commit("Format \(CropSettings.aspects[index].label)")
+    }
+
+    /// Quart de tour dans le sens horaire.
+    func rotateClockwise() {
+        settings.crop.rotation = (settings.crop.rotation + 1) % 4
+        commit("Rotation")
+    }
+
+    func toggleFlip() {
+        settings.crop.flip.toggle()
+        commit("Miroir")
+    }
+
+    /// Taille de l'image après cadrage.
+    var outputSize: CGSize {
+        imageSize == .zero ? .zero : GradeRenderer.outputSize(settings.crop, source: imageSize)
+    }
+
+    // MARK: Recettes et styles personnels
+
+    /// La recette des réglages en cours (même format que le laboratoire du site).
+    var recipe: String { Recipe.encode(settings) }
+
+    /// Applique une recette (texte JSON). Renvoie false si le texte n'en est pas une.
+    @discardableResult
+    func applyRecipe(_ text: String) -> Bool {
+        guard let decoded = Recipe.decode(text) else { return false }
+        settings = decoded
+        commit("Recette")
+        return true
     }
 
     // MARK: Export
@@ -219,5 +274,38 @@ final class PhotoEditorModel: ObservableObject {
                 }
             }
         }
+    }
+}
+
+/// Histogramme RVB d'une image 8 bits, et part des pixels écrêtés.
+struct Histogram: Equatable {
+    /// Trois canaux de 256 classes, normalisés par le pic (extrémités ignorées, comme le site).
+    let channels: [[Float]]
+    let clippedHighlights: Bool
+    let clippedShadows: Bool
+
+    init?(_ image: CGImage) {
+        let width = image.width, height = image.height
+        guard width > 0, height > 0 else { return nil }
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        guard let context = CGContext(data: &pixels, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                                      space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                      bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return nil }
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        var bins = [[Int]](repeating: [Int](repeating: 0, count: 256), count: 3)
+        var high = 0, low = 0
+        for i in stride(from: 0, to: pixels.count, by: 4) {
+            let r = Int(pixels[i]), g = Int(pixels[i + 1]), b = Int(pixels[i + 2])
+            bins[0][r] += 1
+            bins[1][g] += 1
+            bins[2][b] += 1
+            if r >= 254 || g >= 254 || b >= 254 { high += 1 }
+            if r <= 1 && g <= 1 && b <= 1 { low += 1 }
+        }
+        let peak = Float(max(bins.flatMap { $0[2..<254] }.max() ?? 1, 1))
+        channels = bins.map { $0.map { min(Float($0) / peak, 1) } }
+        let total = Float(width * height)
+        clippedHighlights = Float(high) / total > 0.002
+        clippedShadows = Float(low) / total > 0.002
     }
 }

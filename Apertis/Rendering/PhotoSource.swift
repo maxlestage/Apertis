@@ -105,7 +105,18 @@ final class PhotoSource: @unchecked Sendable {
     /// Image développée finale.
     func render(settings: DevelopSettings, maxDimension: CGFloat?, cubeDimension: Int = 33) -> CIImage? {
         guard let base = baseImage(settings: settings, maxDimension: maxDimension) else { return nil }
-        return GradeRenderer.shared.apply(settings, to: base.0, source: base.1, cubeDimension: cubeDimension)
+        let options = GradeRenderer.Options(cubeDimension: cubeDimension, fullResolutionDimension: max(size.width, size.height))
+        return GradeRenderer.shared.apply(settings, to: base.0, source: base.1, options: options)
+    }
+
+    /// Vignette d'un style : l'aperçu en cache, réduit à `dimension` avant le développement.
+    func thumbnail(settings: DevelopSettings, previewDimension: CGFloat, dimension: CGFloat) -> CIImage? {
+        guard let base = baseImage(settings: settings, maxDimension: previewDimension) else { return nil }
+        let extent = base.0.extent
+        let scale = min(1, dimension / max(extent.width, extent.height))
+        let small = base.0.transformed(by: CGAffineTransform(scaleX: scale, y: scale), highQualityDownsample: true)
+        let options = GradeRenderer.Options(cubeDimension: 17, fullResolutionDimension: max(size.width, size.height))
+        return GradeRenderer.shared.apply(settings, to: small, source: base.1, options: options)
     }
 
     /// Métadonnées à écrire dans un export : l'orientation est réinitialisée (les pixels sont
