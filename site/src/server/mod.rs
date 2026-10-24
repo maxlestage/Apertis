@@ -1,5 +1,6 @@
 //! Le serveur : pages, liste d'accès anticipé, sécurité de Paquets devant chaque requête.
 
+pub mod export;
 pub mod home;
 pub mod lab;
 pub mod layout;
@@ -54,6 +55,13 @@ async fn inscrire(req: Request) -> Result<Redirect> {
     Ok(Redirect::see_other("/?merci#liste"))
 }
 
+/// Vrai pendant l'export statique (GitHub Pages) : pas de serveur derrière les formulaires.
+pub static STATIC_EXPORT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn is_static() -> bool {
+    STATIC_EXPORT.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 pub fn app() -> App {
     let mut app = App::new();
     app.model::<Inscription>();
@@ -64,6 +72,10 @@ pub fn app() -> App {
     app.get("/confidentialite", |req: Request| async move { legal::privacy(&req) });
     app.get("/mentions-legales", |req: Request| async move { legal::legal(&req) });
     app.health("/health");
+    if is_static() {
+        app.fallback(|req: Request| async move { legal::not_found(&req) });
+        return app;
+    }
     app.pwa(
         Pwa::new("Apertis")
             .short_name("Apertis")

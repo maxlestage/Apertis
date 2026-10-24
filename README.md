@@ -106,6 +106,20 @@ cd site && paquets dev          # http://localhost:3000
 cargo test -p apertis-site      # depuis la racine
 ```
 
+### Publier sur GitHub Pages
+
+Le workflow [`.github/workflows/pages.yml`](.github/workflows/pages.yml) publie le site sur
+**https://maxlestage.github.io/Apertis/** à chaque commit sur `master` qui touche le site. Il compile
+le serveur et les laboratoires, puis exporte le site en fichiers statiques
+(`apertis-site export`, liens préfixés par `/Apertis`). Les laboratoires photo et vidéo y fonctionnent
+entièrement ; la liste d'accès anticipé, qui a besoin d'un serveur, renvoie vers le projet GitHub.
+
+Activation, une seule fois (possible depuis le téléphone, sur github.com) : *Settings → Pages →
+Build and deployment → Source* : **GitHub Actions**, puis *Actions → Deploy to GitHub Pages →
+Run workflow*.
+
+En local : `./heroku-build.sh && cd site && BASE_PATH=/Apertis ./target/release/apertis-site export ../dist`.
+
 ### Déployer sur Heroku depuis un téléphone
 
 [![Deploy to Heroku](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/maxlestage/Apertis)
