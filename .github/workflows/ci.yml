@@ -47,12 +47,13 @@ jobs:
         run: |
           device=$(xcrun simctl list devices available | grep -m1 -E 'iPhone 1[5-9]' | grep -oE '[0-9A-F-]{36}')
           echo "Simulateur : $device"
+          set -o pipefail
           xcodebuild test \
             -project Apertis.xcodeproj \
             -scheme Apertis \
-            -destination "id=$device" \
+            -destination "id=$device,arch=arm64" \
             -only-testing:ApertisTests \
             CODE_SIGNING_ALLOWED=NO \
-            -quiet
+            2>&1 | grep -E "Test Case .*(passed|failed)|error:|Executed|TEST (SUCCEEDED|FAILED)" 
       - name: Tests du cœur (macOS)
         run: swift test --package-path Packages/ApertisCore
