@@ -153,7 +153,7 @@ final class GradeRenderer: @unchecked Sendable {
         var image = input
         let extent = input.extent
         if crop.angle != 0 {
-            let f = CIFilter.straightenFilter()
+            let f = CIFilter.straighten()
             f.inputImage = image
             f.angle = Float(crop.angle * .pi / 180)
             image = (f.outputImage ?? image).cropped(to: extent)

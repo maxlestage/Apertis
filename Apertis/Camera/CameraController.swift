@@ -365,7 +365,7 @@ final class CameraController: NSObject, ObservableObject {
         guard let format else { return }
         do {
             session.beginConfiguration()
-            session.automaticallyConfiguresCaptureDeviceWideColor = false
+            session.automaticallyConfiguresCaptureDeviceForWideColor = false
             try device.lockForConfiguration()
             device.activeFormat = format
             device.activeColorSpace = format.supportedColorSpaces.contains(space) ? space : .P3_D65
