@@ -21,6 +21,23 @@ paquets = { git = "https://github.com/maxlestage/Paquets" }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 paquets = { git = "https://github.com/maxlestage/Paquets", default-features = false, features = ["client"] }
 wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = [
+  "AudioContext", "AudioDestinationNode", "AudioNode", "BaseAudioContext", "Blob", "BlobEvent",
+  "BlobPropertyBag", "CanvasRenderingContext2d", "CssStyleDeclaration", "DataTransfer", "Document",
+  "DomStringMap", "DomTokenList", "DragEvent", "Element", "Event", "EventTarget", "File", "FileList",
+  "HtmlCanvasElement", "HtmlDialogElement", "HtmlElement", "HtmlInputElement", "HtmlMediaElement",
+  "HtmlSelectElement", "HtmlVideoElement", "ImageBitmap", "ImageBitmapOptions", "ImageData",
+  "ImageOrientation", "KeyboardEvent", "MediaElementAudioSourceNode", "MediaRecorder",
+  "MediaRecorderOptions", "MediaStream", "MediaStreamAudioDestinationNode", "MediaStreamTrack",
+  "MouseEvent", "NodeList", "PointerEvent", "RecordingState", "ResizeQuality", "Response", "Url",
+  "WebGl2RenderingContext", "WebGlBuffer", "WebGlFramebuffer", "WebGlProgram", "WebGlShader",
+  "WebGlTexture", "WebGlUniformLocation", "WebGlVertexArrayObject", "Window",
+] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+# Pour examples/bake.rs : les images de démonstration du site, développées avec le
+# même pipeline que le laboratoire.
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
