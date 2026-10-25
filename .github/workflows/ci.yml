@@ -27,8 +27,9 @@ jobs:
           cargo build -p apertis-site --lib --target wasm32-unknown-unknown --profile wasm-release
 
   ios:
-    name: Application iOS (Xcode)
-    runs-on: macos-15
+    name: Application iOS et iPadOS (Xcode 27)
+    # Image GitHub avec Xcode 27 (Swift 6.4, SDK iOS et iPadOS 27).
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v4
       - name: Générer le projet Xcode
@@ -43,17 +44,20 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO \
             -quiet
-      - name: Tests de rendu sur le simulateur
+      - name: Tests sur simulateur iPhone et iPad
         run: |
-          device=$(xcrun simctl list devices available | grep -m1 -E 'iPhone 1[5-9]' | grep -oE '[0-9A-F-]{36}')
-          echo "Simulateur : $device"
           set -o pipefail
-          xcodebuild test \
-            -project Apertis.xcodeproj \
-            -scheme Apertis \
-            -destination "id=$device,arch=arm64" \
-            -only-testing:ApertisTests \
-            CODE_SIGNING_ALLOWED=NO \
-            2>&1 | grep -E "Test Case .*(passed|failed)|error:|Executed|TEST (SUCCEEDED|FAILED)" 
+          xcodebuild -version
+          for model in 'iPhone 1[7-9] Pro' 'iPad Pro'; do
+            device=$(xcrun simctl list devices available | grep -m1 -E "$model" | grep -oE '[0-9A-F-]{36}')
+            echo "Simulateur : $(xcrun simctl list devices available | grep -m1 -E "$model")"
+            xcodebuild test \
+              -project Apertis.xcodeproj \
+              -scheme Apertis \
+              -destination "id=$device,arch=arm64" \
+              -only-testing:ApertisTests \
+              CODE_SIGNING_ALLOWED=NO \
+              2>&1 | grep -E "Test Case .*(passed|failed)|error:|Executed|TEST (SUCCEEDED|FAILED)"
+          done
       - name: Tests du cœur (macOS)
         run: swift test --package-path Packages/ApertisCore

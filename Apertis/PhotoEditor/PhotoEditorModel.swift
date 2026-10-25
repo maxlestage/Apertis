@@ -302,10 +302,14 @@ struct Histogram: Equatable {
             if r >= 254 || g >= 254 || b >= 254 { high += 1 }
             if r <= 1 && g <= 1 && b <= 1 { low += 1 }
         }
+        self.init(bins: bins, clippedHighlights: high, clippedShadows: low, total: width * height)
+    }
+
+    /// À partir des comptes par classe et du nombre de pixels écrêtés.
+    init(bins: [[Int]], clippedHighlights high: Int, clippedShadows low: Int, total: Int) {
         let peak = Float(max(bins.flatMap { $0[2..<254] }.max() ?? 1, 1))
         channels = bins.map { $0.map { min(Float($0) / peak, 1) } }
-        let total = Float(width * height)
-        clippedHighlights = Float(high) / total > 0.002
-        clippedShadows = Float(low) / total > 0.002
+        clippedHighlights = Float(high) / Float(total) > 0.002
+        clippedShadows = Float(low) / Float(total) > 0.002
     }
 }
