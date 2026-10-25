@@ -3,6 +3,7 @@ import ApertisCore
 
 struct CameraView: View {
     @EnvironmentObject private var store: MediaStore
+    @EnvironmentObject private var subscription: Subscription
     @StateObject private var camera = CameraController()
     @StateObject private var level = LevelMonitor()
     @AppStorage("camera.grid") private var showGrid = true
@@ -52,6 +53,8 @@ struct CameraView: View {
         }
         .foregroundStyle(.white)
         .onAppear {
+            camera.onProRequired = { feature in subscription.requested = feature }
+            camera.setProUnlocked(subscription.isPro)
             camera.onPhotoCaptured = { capture in
                 do { try store.addCapturedPhoto(capture) } catch { message = "Enregistrement impossible : \(error.localizedDescription)" }
             }
@@ -63,6 +66,7 @@ struct CameraView: View {
             camera.start()
             level.start()
         }
+        .onChange(of: subscription.isPro) { _, pro in camera.setProUnlocked(pro) }
         .onDisappear {
             camera.stop()
             level.stop()

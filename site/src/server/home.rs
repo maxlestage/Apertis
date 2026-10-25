@@ -272,14 +272,14 @@ fn pricing() -> Element {
                     "Gratuit",
                     "0 €",
                     "Pour découvrir et créer sans contrainte.",
-                    &["Caméra photo et vidéo", "Réglages fondamentaux et styles de base", "Montage simple", "Exports sans filigrane"],
+                    &["Caméra photo et vidéo, RAW et ProRAW", "Correction d'exposition, balance des blancs et mise au point manuelles", "Réglages fondamentaux et styles de base", "Montage simple, exports sans filigrane"],
                     false,
                 ))
                 .child(plan(
                     "Pro",
-                    "4,99 € / mois",
+                    "7,99 € / mois",
                     "Abonnement mensuel, sans engagement. 7 jours d'essai gratuit.",
-                    &["Courbes, TSL, étalonnage, LUT 3D", "Réduction du bruit RAW et ProRAW", "Étalonnage plan par plan et piste musique", "Export HEIF 10 bits et TIFF 16 bits", "Tous les styles et ceux à venir"],
+                    &["Modes A, S, M et ouverture variable de l'iPhone 18 Pro", "Focus peaking, zébras, fausses couleurs, loupe", "Bracketing, pose longue, intervallomètre", "Charte grise, traitement minimal, cadres cinéma, réglages C1–C3", "Courbes, TSL, étalonnage, LUT 3D, tous les styles", "Étalonnage plan par plan, piste musique", "Export HEIF 10 bits et TIFF 16 bits"],
                     true,
                 )),
         )
@@ -293,7 +293,7 @@ fn faq() -> Element {
         .child(section_head("Questions", "Questions fréquentes.", ""))
         .child(q("Quand l'application sera-t-elle disponible ?", "La bêta privée ouvre sur TestFlight pour les personnes inscrites à l'accès anticipé, puis l'app arrivera sur l'App Store. Un seul e-mail vous préviendra."))
         .child(q("Quels appareils sont compatibles ?", "Apertis fonctionne sur iPhone et iPad à partir d'iOS 17. Sur iPhone 18 Pro avec iOS 27, l'app pilote l'ouverture variable (ƒ/1.48 à ƒ/4) et le suivi du sujet ; sur iPad, les caméras USB-C sont reconnues. Le RAW, le ProRAW, le HDR, l'Apple Log et les cadences élevées dépendent de votre modèle : l'app lit les capacités réelles de chaque objectif et ne propose jamais une fonction indisponible."))
-        .child(q("Qu'apporte Apertis par rapport à l'appareil photo de l'iPhone ?", "Les aides d'un moniteur de tournage (focus peaking, zébras, fausses couleurs, loupe), une cellule avec aiguille en manuel, le bracketing d'exposition en RAW, la pose longue calculée (eau filée, traînées lumineuses) et l'intervallomètre, la balance des blancs sur charte grise, un traitement minimal sans fusion multi-images, le choix des priorités de l'automatisme sur iOS 27, des cadres de visée cinéma et trois réglages personnels. Tout le reste reste réglable à la main : ouverture, vitesse, ISO, balance des blancs en Kelvin, mise au point."))
+        .child(q("Qu'apporte Apertis par rapport à l'appareil photo de l'iPhone ?", "Avec Apertis Pro : les aides d'un moniteur de tournage (focus peaking, zébras, fausses couleurs, loupe), une cellule avec aiguille en manuel, le bracketing d'exposition en RAW, la pose longue calculée (eau filée, traînées lumineuses) et l'intervallomètre, la balance des blancs sur charte grise, un traitement minimal sans fusion multi-images, le choix des priorités de l'automatisme sur iOS 27, des cadres de visée cinéma et trois réglages personnels. Tout le reste reste réglable à la main : ouverture, vitesse, ISO, balance des blancs en Kelvin, mise au point."))
         .child(q("Mes photos sont-elles envoyées quelque part ?", "Non. L'app et le laboratoire en ligne calculent tout sur votre appareil. Il n'y a ni cloud ni compte obligatoire, et aucune image ne transite par nos serveurs."))
         .child(q("Le laboratoire en ligne lit-il les RAW ?", "Le laboratoire en ligne ouvre les images que votre navigateur sait décoder (JPEG, PNG, WebP, HEIC sur Safari). Le développement des RAW et ProRAW est réservé à l'application, qui accède aux données du capteur."))
         .child(q("Que deviennent mes projets si j'arrête l'abonnement ?", "Ils restent à vous : vos originaux, vos projets et vos exports restent accessibles et exportables. Seuls les outils Pro ne sont plus modifiables."))
