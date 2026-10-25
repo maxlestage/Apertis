@@ -348,7 +348,7 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate {
     }
 
     /// Fausses couleurs, zébras et peaking sur une image réduite du viseur.
-    private static func assistOverlay(for image: CIImage, settings: AssistSettings) -> OverlayImage? {
+    static func assistOverlay(for image: CIImage, settings: AssistSettings) -> OverlayImage? {
         guard let kernel = assistKernel else { return nil }
         let scale = min(1, 720 / max(image.extent.width, image.extent.height))
         let small = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
