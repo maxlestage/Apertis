@@ -4,6 +4,7 @@ import ApertisCore
 /// Panneau pro : exposition, aides à la visée, prise de vue, réglages personnels.
 struct ProPanel: View {
     @ObservedObject var camera: CameraController
+    @EnvironmentObject private var subscription: Subscription
     @State private var tab: Tab = .exposure
 
     enum Tab: String, CaseIterable, Identifiable {
@@ -27,6 +28,12 @@ struct ProPanel: View {
             .pickerStyle(.segmented)
             .padding(.horizontal)
             .padding(.top, 8)
+            if !subscription.isPro && tab != .exposure {
+                Button { subscription.requested = tab == .assist ? .viewfinderAssists : (tab == .drive ? .captureModes : .advancedCapture) } label: {
+                    Label("Outils Apertis Pro — essai gratuit de 7 jours", systemImage: "lock.fill").font(.caption.bold())
+                }
+                .padding(.top, 6)
+            }
             switch tab {
             case .exposure: ManualControlsPanel(camera: camera)
             case .assist: AssistPanel(camera: camera)

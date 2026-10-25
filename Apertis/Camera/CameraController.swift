@@ -122,6 +122,11 @@ final class CameraController: NSObject, ObservableObject, @unchecked Sendable {
     @Published var customSignals: Set<ExposureSignalOption>?
     @Published var presets: [CameraPreset] = CameraPresetStore.load()
 
+    /// Outils de boîtier débloqués par Apertis Pro (lu et écrit sur le fil principal).
+    private(set) var proUnlocked = false
+    /// Appelé sur le fil principal quand un outil Pro est demandé sans abonnement.
+    var onProRequired: (@MainActor (ProFeature) -> Void)?
+
     /// Appelé sur le fil principal pour chaque photo enregistrée.
     var onPhotoCaptured: ((CapturedPhoto) -> Void)?
     /// Appelé sur le fil principal avec le fichier temporaire de la vidéo.
@@ -735,12 +740,38 @@ final class CameraController: NSObject, ObservableObject, @unchecked Sendable {
         }
     }
 
+    /// Vrai si l'outil est débloqué ; sinon présente l'abonnement (fil principal).
+    func requirePro(_ feature: ProFeature) -> Bool {
+        if proUnlocked { return true }
+        MainActor.assumeIsolated { onProRequired?(feature) }
+        return false
+    }
+
+    /// Fin d'abonnement : l'appareil revient aux réglages de la formule gratuite.
+    func setProUnlocked(_ unlocked: Bool) {
+        proUnlocked = unlocked
+        guard !unlocked else { return }
+        if program != .program { updateHardware { $0.program = .program; $0.signals = nil } }
+        if customSignals != nil { updateHardware { $0.signals = nil } }
+        if intervalShots != nil { MainActor.assumeIsolated { stopIntervalometer() } }
+        if longExposureProgress == nil { drive = .single }
+        setAssist(AssistSettings())
+        frameGuide = 0
+        minimalProcessing = false
+        measuringWhite = false
+    }
+
     func setProgram(_ newProgram: ExposureProgram) {
         guard programs.contains(newProgram) else { return }
+        guard newProgram == .program || requirePro(.manualExposure) else { return }
         updateHardware { $0.program = newProgram }
     }
 
     func setExposure(aperture: Float? = nil, iso: Float? = nil, isoAuto: Bool? = nil, shutter: Double? = nil, bias: Float? = nil) {
+        // Seule la correction d'exposition (mode P) fait partie de la formule gratuite.
+        if aperture != nil || iso != nil || isoAuto != nil || shutter != nil {
+            guard requirePro(.manualExposure) else { return }
+        }
         updateHardware {
             if let aperture { $0.aperture = aperture }
             if let iso { $0.iso = iso }
@@ -826,6 +857,7 @@ final class CameraController: NSObject, ObservableObject, @unchecked Sendable {
 
     /// À appeler depuis le fil principal : modifie les priorités de l'automatisme.
     func setExposureSignals(_ signals: Set<ExposureSignalOption>?) {
+        guard signals == nil || requirePro(.advancedCapture) else { return }
         updateHardware { $0.signals = signals }
     }
 
@@ -907,7 +939,7 @@ final class CameraController: NSObject, ObservableObject, @unchecked Sendable {
     /// Déclencheur : selon le mode d'entraînement.
     @MainActor
     func shutterPressed() {
-        switch drive {
+        switch proUnlocked ? drive : .single {
         case .single: capturePhoto()
         case .bracketing: captureBracket()
         case .longExposure: startLongExposure()
@@ -1040,7 +1072,7 @@ extension CameraController: AVCaptureSessionControlsDelegate {
                 let picker = AVCaptureIndexPicker("Ouverture", symbolName: "camera.aperture",
                                                   localizedIndexTitles: apertures.map(CameraFormat.aperture))
                 picker.setActionQueue(.main) { [weak self] index in
-                    guard let self, apertures.indices.contains(index) else { return }
+                    guard let self, apertures.indices.contains(index), self.requirePro(.manualExposure) else { return }
                     if self.program == .program { self.setProgram(.aperturePriority) }
                     self.setExposure(aperture: apertures[index])
                 }

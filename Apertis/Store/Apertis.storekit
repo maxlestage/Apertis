@@ -35,7 +35,7 @@
           "codeOffers" : [
 
           ],
-          "displayPrice" : "4.99",
+          "displayPrice" : "7.99",
           "familyShareable" : false,
           "groupNumber" : 1,
           "internalID" : "6E9B2A10",
@@ -46,7 +46,7 @@
           },
           "localizations" : [
             {
-              "description" : "Courbes, TSL, étalonnage, LUT 3D, tous les styles, exports 10 et 16 bits",
+              "description" : "Outils de boîtier, retouche avancée, exports",
               "displayName" : "Apertis Pro mensuel",
               "locale" : "fr_FR"
             }
