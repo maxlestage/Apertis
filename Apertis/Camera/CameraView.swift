@@ -28,7 +28,7 @@ struct CameraView: View {
                         Divider().background(Color.white.opacity(0.2))
                         ScrollView {
                             VStack(spacing: 18) {
-                                ManualControlsPanel(camera: camera)
+                                ProPanel(camera: camera)
                                 captureControls
                             }
                             .padding(.vertical)
@@ -40,7 +40,7 @@ struct CameraView: View {
                         topBar
                         viewfinder(aspect: camera.mode == .photo ? 3.0 / 4.0 : 9.0 / 16.0)
                         if showManual {
-                            ScrollView { ManualControlsPanel(camera: camera) }
+                            ScrollView { ProPanel(camera: camera) }
                                 .frame(maxHeight: proxy.size.height * 0.36)
                                 .transition(.move(edge: .bottom))
                         }
@@ -82,6 +82,10 @@ struct CameraView: View {
     private func viewfinder(aspect: CGFloat) -> some View {
         ZStack {
             CameraPreviewView(camera: camera)
+            if let overlay = camera.assistOverlay, camera.mode == .photo {
+                Image(decorative: overlay.image, scale: 1).resizable().allowsHitTesting(false)
+            }
+            if camera.frameGuide > 0 { FrameGuideOverlay(aspect: camera.frameGuide) }
             // Pendant que le bouton Commande affiche ses réglages, le viseur reste dégagé.
             if !camera.systemControlsFullscreen {
                 if showGrid { GridOverlay() }
@@ -96,9 +100,44 @@ struct CameraView: View {
                                 .foregroundStyle(.black)
                         }
                         Spacer()
-                        if showHistogram, let histogram = camera.liveHistogram {
-                            HistogramView(histogram: histogram).frame(width: 112, height: 56)
+                        VStack(alignment: .trailing, spacing: 8) {
+                            if showHistogram, let histogram = camera.liveHistogram {
+                                HistogramView(histogram: histogram).frame(width: 112, height: 56)
+                            }
+                            if camera.assist.loupe, let loupe = camera.loupe {
+                                Image(decorative: loupe.image, scale: 1)
+                                    .resizable()
+                                    .interpolation(.none)
+                                    .frame(width: 132, height: 132)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.8), lineWidth: 1))
+                                    .accessibilityLabel("Loupe de mise au point")
+                            }
                         }
+                    }
+                    if camera.measuringWhite {
+                        HStack {
+                            Label("Touchez une surface grise ou blanche", systemImage: "eyedropper")
+                            Button("Annuler") { camera.cancelWhiteMeasurement() }.bold()
+                        }
+                        .font(.caption)
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(.black.opacity(0.7), in: Capsule())
+                    }
+                    if let progress = camera.longExposureProgress {
+                        VStack(spacing: 6) {
+                            ProgressView(value: progress).tint(.yellow).frame(width: 160)
+                            Text("Pose longue… ne bougez pas").font(.caption.bold())
+                        }
+                        .padding(10)
+                        .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 10))
+                    }
+                    if let shots = camera.intervalShots {
+                        let total = camera.intervalometer.count
+                        Text(total > 0 ? "Série : \(shots) / \(total)" : "Série : \(shots)")
+                            .font(.caption.monospacedDigit().bold())
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .background(Color.red.opacity(0.85), in: Capsule())
                     }
                     Spacer()
                     HStack {
@@ -220,25 +259,36 @@ struct CameraView: View {
             }
             .pickerStyle(.segmented)
             .frame(width: 200)
-            .disabled(camera.isRecording)
-            shutterButton
+            .disabled(camera.isRecording || camera.intervalShots != nil)
+            HStack(spacing: 28) {
+                if camera.mode == .photo { driveMenu } else { Color.clear.frame(width: 44, height: 44) }
+                shutterButton
+                presetMenu
+            }
         }
     }
 
     private var shutterButton: some View {
         Button {
             if camera.mode == .photo {
-                withAnimation(.easeOut(duration: 0.08)) { flash = true }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { withAnimation { flash = false } }
-                camera.capturePhoto()
+                if camera.drive == .single || camera.drive == .bracketing {
+                    withAnimation(.easeOut(duration: 0.08)) { flash = true }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { withAnimation { flash = false } }
+                }
+                camera.shutterPressed()
             } else {
                 camera.toggleRecording()
             }
         } label: {
             ZStack {
                 Circle().stroke(Color.white, lineWidth: 4).frame(width: 74, height: 74)
-                if camera.mode == .photo {
+                if camera.mode == .photo && camera.intervalShots != nil {
+                    RoundedRectangle(cornerRadius: 6).fill(Color.red).frame(width: 30, height: 30)
+                } else if camera.mode == .photo {
                     Circle().fill(camera.isCaptureBlocked ? Color.gray : Color.white).frame(width: 60, height: 60)
+                    if camera.drive != .single {
+                        Image(systemName: camera.drive.symbol).font(.system(size: 18, weight: .bold)).foregroundStyle(.black)
+                    }
                 } else {
                     RoundedRectangle(cornerRadius: camera.isRecording ? 6 : 30)
                         .fill(Color.red)
@@ -247,8 +297,48 @@ struct CameraView: View {
             }
         }
         // Prise de vue réactive : le déclencheur n'attend que si l'appareil n'est vraiment pas prêt.
-        .disabled(camera.status != .ready || (camera.mode == .photo && camera.isCaptureBlocked))
+        .disabled(camera.status != .ready || camera.longExposureProgress != nil
+                  || (camera.mode == .photo && camera.isCaptureBlocked && camera.intervalShots == nil))
         .accessibilityLabel(camera.mode == .photo ? "Prendre une photo" : (camera.isRecording ? "Arrêter" : "Filmer"))
+    }
+
+    /// Molette d'entraînement : vue par vue, bracketing, pose longue, intervalles.
+    private var driveMenu: some View {
+        Menu {
+            ForEach(DriveMode.allCases) { mode in
+                Button { camera.setDrive(mode) } label: {
+                    Label(mode.label, systemImage: mode == camera.drive ? "checkmark" : mode.symbol)
+                }
+                .disabled(mode == .bracketing && camera.maxBracketCount < 2)
+            }
+        } label: {
+            Image(systemName: camera.drive.symbol)
+                .font(.system(size: 18))
+                .frame(width: 44, height: 44)
+                .background(Color.white.opacity(0.15), in: Circle())
+        }
+        .accessibilityLabel("Mode d'entraînement : \(camera.drive.label)")
+    }
+
+    /// Réglages personnels C1, C2, C3.
+    private var presetMenu: some View {
+        Menu {
+            if camera.presets.isEmpty {
+                Text("Aucun réglage personnel")
+            }
+            ForEach(camera.presets) { preset in
+                Button { camera.applyPreset(preset) } label: {
+                    Text("\(preset.badge) · \(preset.name)\n\(preset.summary)")
+                }
+            }
+        } label: {
+            Text("C")
+                .font(.system(size: 17, weight: .bold))
+                .frame(width: 44, height: 44)
+                .background(Color.white.opacity(0.15), in: Circle())
+        }
+        .accessibilityLabel("Réglages personnels")
+        .disabled(camera.mode != .photo)
     }
 
     @ViewBuilder private var statusOverlay: some View {
@@ -302,6 +392,9 @@ struct ExposureReadout: View {
             if program.usesExposureBias && camera.exposureBias != 0 {
                 Text(String(format: "%+.1f IL", camera.exposureBias))
             }
+            // Cellule : en manuel, l'aiguille indique l'écart avec la bonne exposition.
+            if program == .manual { MeterNeedle(offset: camera.meterOffset) }
+            if let ev = camera.sceneEV { Text(String(format: "EV %.1f", ev)).opacity(0.75) }
         }
         .font(.caption.monospacedDigit())
         .padding(.horizontal, 8).padding(.vertical, 4)
