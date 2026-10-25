@@ -155,7 +155,7 @@ final class PhotoEditorModel: ObservableObject, @unchecked Sendable {
 
     // MARK: Historique
 
-    func binding(_ keyPath: WritableKeyPath<DevelopSettings, Double>) -> Binding<Double> {
+    func binding(_ keyPath: WritableKeyPath<DevelopSettings, Double> & Sendable) -> Binding<Double> {
         Binding(get: { self.settings[keyPath: keyPath] }, set: { self.settings[keyPath: keyPath] = $0 })
     }
 
