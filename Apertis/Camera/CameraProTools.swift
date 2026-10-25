@@ -300,11 +300,11 @@ extension CameraController {
 
 extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate {
     /// Contexte sans gestion des couleurs : les aides lisent les valeurs affichées.
-    nonisolated(unsafe) static let assistContext = CIContext(options: [
+    static let assistContext = CIContext(options: [
         .workingColorSpace: NSNull(), .outputColorSpace: NSNull(), .cacheIntermediates: false,
     ])
 
-    nonisolated(unsafe) private static let assistKernel: CIColorKernel? = {
+    private static let assistKernel: CIColorKernel? = {
         guard let url = Bundle.main.url(forResource: "default", withExtension: "metallib"),
               let data = try? Data(contentsOf: url) else { return nil }
         return try? CIColorKernel(functionName: "apertisAssist", fromMetalLibraryData: data)
@@ -352,7 +352,8 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate {
         guard let kernel = assistKernel else { return nil }
         let scale = min(1, 720 / max(image.extent.width, image.extent.height))
         let small = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-        let edges = small.applyingFilter("CIEdges", parameters: [kCIInputIntensityKey: 3])
+        // Bords prolongés : sans cela, le cadre de l'image serait pris pour un contour.
+        let edges = small.clampedToExtent().applyingFilter("CIEdges", parameters: [kCIInputIntensityKey: 3]).cropped(to: small.extent)
         let options = CIVector(x: settings.falseColor ? 1 : 0,
                                y: CGFloat(settings.zebras ? settings.zebraLevel : 0),
                                z: CGFloat(settings.focusPeaking ? settings.peakingThreshold : 0),
