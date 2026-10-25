@@ -5,6 +5,8 @@ import ApertisCore
 /// Ce que débloque Apertis Pro (même liste que la carte « Pro » du site).
 enum ProFeature: String, Identifiable {
     case curves, hsl, grading, lut, allStyles, rawDetails, highBitDepthExport, clipGrading, audioTracks
+    // Appareil photo
+    case manualExposure, viewfinderAssists, captureModes, advancedCapture
 
     var id: String { rawValue }
 
@@ -19,11 +21,15 @@ enum ProFeature: String, Identifiable {
         case .highBitDepthExport: return "Export HEIF 10 bits et TIFF 16 bits"
         case .clipGrading: return "Étalonnage par plan"
         case .audioTracks: return "Piste musique"
+        case .manualExposure: return "Modes A, S, M et ouverture"
+        case .viewfinderAssists: return "Aides à la visée"
+        case .captureModes: return "Bracketing, pose longue et intervallomètre"
+        case .advancedCapture: return "Réglages avancés de prise de vue"
         }
     }
 }
 
-/// Abonnement Apertis Pro : 4,99 € par mois, 7 jours d'essai gratuit, sans engagement.
+/// Abonnement Apertis Pro : 7,99 € par mois, 7 jours d'essai gratuit, sans engagement.
 ///
 /// StoreKit 2 : les droits viennent de `Transaction.currentEntitlements`, vérifiés sur
 /// l'appareil. Rien n'est bloqué en lecture : un projet créé avec des outils Pro s'ouvre,
@@ -118,7 +124,7 @@ final class Subscription: ObservableObject {
 
     /// Prix affiché : celui de l'App Store (devise locale), à défaut le tarif de référence.
     var priceLabel: String {
-        (product?.displayPrice ?? "4,99 €") + " / mois"
+        (product?.displayPrice ?? "7,99 €") + " / mois"
     }
 
     /// Styles de la formule gratuite : quelques styles d'Apertis et tous les styles personnels.
@@ -134,8 +140,12 @@ struct PaywallView: View {
     var feature: ProFeature?
 
     private let benefits = [
+        ("camera.aperture", "Modes A, S, M et ouverture variable de l'iPhone 18 Pro"),
+        ("scope", "Focus peaking, zébras, fausses couleurs, loupe"),
+        ("square.stack.3d.down.right", "Bracketing, pose longue, intervallomètre"),
+        ("slider.horizontal.3", "Charte grise, traitement minimal, cadres cinéma, C1–C3"),
         ("point.topleft.down.to.point.bottomright.curvepath", "Courbes, TSL, étalonnage, LUT 3D"),
-        ("camera.aperture", "Réduction du bruit RAW et ProRAW"),
+        ("camera.filters", "Réduction du bruit RAW et ProRAW"),
         ("film.stack", "Étalonnage plan par plan et piste musique"),
         ("square.and.arrow.up", "Export HEIF 10 bits et TIFF 16 bits"),
         ("square.stack.3d.up", "Tous les styles et ceux à venir"),
