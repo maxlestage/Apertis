@@ -29,7 +29,7 @@ pub fn privacy(req: &Request) -> Page {
                 "Vos photos et vidéos",
                 &[
                     "Les laboratoires photo et vidéo du site fonctionnent entièrement dans votre navigateur (WebAssembly et WebGL2). Les fichiers que vous ouvrez ne sont jamais envoyés sur nos serveurs ni sur ceux d'un tiers : ils sont lus, calculés et exportés sur votre appareil.",
-                    "L'application iPhone suit le même principe : aucun cloud, aucun compte obligatoire, aucun envoi d'image.",
+                    "L'application iPhone et iPad suit le même principe : aucun cloud, aucun compte obligatoire, aucun envoi d'image.",
                 ],
             ),
             (

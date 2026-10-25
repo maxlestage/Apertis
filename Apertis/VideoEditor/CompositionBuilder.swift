@@ -168,30 +168,53 @@ enum CompositionBuilder {
     }
 
     static func export(_ built: BuiltComposition, preset: VideoExportPreset, to url: URL,
-                       progress: @escaping (Float) -> Void) async throws {
+                       progress: @escaping @Sendable (Float) -> Void) async throws {
         guard let session = AVAssetExportSession(asset: built.composition, presetName: preset.presetName) else {
             throw CompositionError.exportUnavailable
         }
-        session.outputURL = url
-        session.outputFileType = preset.fileType
         session.videoComposition = built.videoComposition
         session.audioMix = built.audioMix
         session.shouldOptimizeForNetworkUse = true
+        // La session est lue par la tâche de progression pendant l'export : accès en lecture seule.
+        let shared = SharedExportSession(session)
 
-        let poll = Task {
-            while !Task.isCancelled {
-                progress(session.progress)
-                try? await Task.sleep(nanoseconds: 200_000_000)
+        if #available(iOS 18.0, *) {
+            let poll = Task {
+                for await state in shared.session.states(updateInterval: 0.2) {
+                    if case .exporting(let report) = state { progress(Float(report.fractionCompleted)) }
+                }
             }
-        }
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            session.exportAsynchronously { continuation.resume() }
-        }
-        poll.cancel()
-        guard session.status == .completed else {
-            try? FileManager.default.removeItem(at: url)
-            throw CompositionError.exportFailed(session.error?.localizedDescription ?? "statut \(session.status.rawValue)")
+            defer { poll.cancel() }
+            do {
+                try await shared.session.export(to: url, as: preset.fileType)
+            } catch {
+                try? FileManager.default.removeItem(at: url)
+                throw CompositionError.exportFailed(error.localizedDescription)
+            }
+        } else {
+            session.outputURL = url
+            session.outputFileType = preset.fileType
+            let poll = Task {
+                while !Task.isCancelled {
+                    progress(shared.session.progress)
+                    try? await Task.sleep(nanoseconds: 200_000_000)
+                }
+            }
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                shared.session.exportAsynchronously { continuation.resume() }
+            }
+            poll.cancel()
+            guard shared.session.status == .completed else {
+                try? FileManager.default.removeItem(at: url)
+                throw CompositionError.exportFailed(shared.session.error?.localizedDescription ?? "statut \(shared.session.status.rawValue)")
+            }
         }
         progress(1)
     }
+}
+
+/// Session d'export partagée entre l'export et la lecture de sa progression.
+private final class SharedExportSession: @unchecked Sendable {
+    let session: AVAssetExportSession
+    init(_ session: AVAssetExportSession) { self.session = session }
 }

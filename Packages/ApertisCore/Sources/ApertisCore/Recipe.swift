@@ -24,11 +24,11 @@ public enum Recipe {
     /// Clés propres à l'app.
     static let appKeys: [String] = ["noise_reduction"] + (0..<3).map { "grade_l\($0)" }
 
-    private static let channels: [(name: String, path: WritableKeyPath<CurveSet, [CurvePoint]>)] = [
+    private static var channels: [(name: String, path: WritableKeyPath<CurveSet, [CurvePoint]>)] { [
         ("m", \.master), ("r", \.red), ("g", \.green), ("b", \.blue),
-    ]
+    ] }
 
-    private static let wheels: [WritableKeyPath<ColorGrading, GradeWheel>] = [\.shadows, \.midtones, \.highlights]
+    private static var wheels: [WritableKeyPath<ColorGrading, GradeWheel>] { [\.shadows, \.midtones, \.highlights] }
 
     /// Valeur d'un réglage par sa clé de recette.
     public static func value(_ key: String, in s: DevelopSettings) -> Double? {

@@ -1,4 +1,4 @@
-// swift-tools-version:5.10
+// swift-tools-version:6.0
 import PackageDescription
 
 // Cœur d'Apertis : modèles, colorimétrie de référence, format de projet et timeline.

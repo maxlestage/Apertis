@@ -4,7 +4,7 @@ import ApertisCore
 
 /// État du studio vidéo. La timeline est la source de vérité ; la composition AVFoundation
 /// est reconstruite après chaque modification de montage.
-final class VideoEditorModel: ObservableObject {
+final class VideoEditorModel: ObservableObject, @unchecked Sendable {
     @Published private(set) var project: VideoProject
     @Published var selectedClipID: UUID?
     @Published private(set) var currentTime: Double = 0

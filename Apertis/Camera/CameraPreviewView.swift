@@ -1,41 +1,43 @@
 @preconcurrency import AVFoundation
 import SwiftUI
 
-/// Viseur : couche d'aperçu AVFoundation, toucher pour faire la mise au point.
+/// Viseur : couche d'aperçu AVFoundation. Toucher : mise au point et mesure ; pincer : zoom.
+/// L'orientation de l'image suit l'appareil (`AVCaptureDevice.RotationCoordinator`).
 struct CameraPreviewView: UIViewRepresentable {
-    let session: AVCaptureSession
-    let onTap: (CGPoint) -> Void
+    let camera: CameraController
 
     final class PreviewView: UIView {
         override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
         var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
-        var onTap: ((CGPoint) -> Void)?
+        var camera: CameraController?
+        private var pinchStart: Double = 1
 
         @objc func handleTap(_ recognizer: UITapGestureRecognizer) {
             let point = recognizer.location(in: self)
-            onTap?(previewLayer.captureDevicePointConverted(fromLayerPoint: point))
+            camera?.focus(at: previewLayer.captureDevicePointConverted(fromLayerPoint: point))
         }
 
-        override func layoutSubviews() {
-            super.layoutSubviews()
-            if let connection = previewLayer.connection, connection.isVideoRotationAngleSupported(90) {
-                connection.videoRotationAngle = 90
-            }
+        @objc func handlePinch(_ recognizer: UIPinchGestureRecognizer) {
+            guard let camera else { return }
+            if recognizer.state == .began { pinchStart = camera.zoomFactor }
+            camera.setZoom(pinchStart * Double(recognizer.scale))
         }
     }
 
     func makeUIView(context: Context) -> PreviewView {
         let view = PreviewView()
         view.backgroundColor = .black
-        view.previewLayer.session = session
+        view.previewLayer.session = camera.session
         view.previewLayer.videoGravity = .resizeAspect
-        view.onTap = onTap
+        view.camera = camera
         view.addGestureRecognizer(UITapGestureRecognizer(target: view, action: #selector(PreviewView.handleTap(_:))))
+        view.addGestureRecognizer(UIPinchGestureRecognizer(target: view, action: #selector(PreviewView.handlePinch(_:))))
+        camera.attachPreviewLayer(view.previewLayer)
         return view
     }
 
     func updateUIView(_ view: PreviewView, context: Context) {
-        view.onTap = onTap
+        view.camera = camera
     }
 }
 
