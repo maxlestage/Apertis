@@ -82,7 +82,7 @@ fn stats() -> Element {
     section()
         .class("stats")
         .child(stat("RAW · ProRAW", "Capture et développement des fichiers bruts"))
-        .child(stat("4K · HDR · Log", "Selon les capacités réelles de votre iPhone"))
+        .child(stat("ƒ/1.48 à ƒ/4", "Ouverture variable de l'iPhone 18 Pro"))
         .child(stat("LUT 3D 33³", "Étalonnage calculé sur le GPU, aperçu = export"))
         .child(stat("0 octet", "Envoyé sur nos serveurs : tout reste sur l'appareil"))
 }
@@ -131,8 +131,8 @@ fn features() -> Element {
                 .child(card(
                     "camera",
                     "Caméra manuelle",
-                    "Chaque réglage du capteur, sous vos doigts. Seuls les modes que votre iPhone sait vraiment faire sont proposés.",
-                    &["RAW (DNG) et Apple ProRAW", "ISO, vitesse, balance des blancs en Kelvin", "Mise au point manuelle, verrouillage AE/AWB", "Vidéo 4K, HDR et Apple Log, ProRes"],
+                    "Chaque réglage du capteur, sous vos doigts, sur iPhone comme sur iPad. Seuls les modes que votre appareil sait vraiment faire sont proposés.",
+                    &["Modes P, A, S, M et ouverture variable de l'iPhone 18 Pro", "Focales de 0,5× à 8× (iPhone 18 Pro), bouton Commande de l'appareil photo", "RAW (DNG) et Apple ProRAW en 12, 24 ou 48 Mpx", "Suivi du sujet, mise au point manuelle, histogramme et niveau", "Vidéo 4K, HDR et Apple Log, ProRes"],
                     "wide",
                 ))
                 .child(card(
@@ -292,7 +292,7 @@ fn faq() -> Element {
         .attr("id", "faq")
         .child(section_head("Questions", "Questions fréquentes.", ""))
         .child(q("Quand l'application sera-t-elle disponible ?", "La bêta privée ouvre sur TestFlight pour les personnes inscrites à l'accès anticipé, puis l'app arrivera sur l'App Store. Un seul e-mail vous préviendra."))
-        .child(q("Quels iPhone sont compatibles ?", "Apertis fonctionne à partir d'iOS 17. Le RAW, le ProRAW, le HDR, l'Apple Log et les cadences élevées dépendent de votre modèle : l'app lit les capacités réelles de chaque objectif et ne propose jamais une fonction indisponible."))
+        .child(q("Quels appareils sont compatibles ?", "Apertis fonctionne sur iPhone et iPad à partir d'iOS 17. Sur iPhone 18 Pro avec iOS 27, l'app pilote l'ouverture variable (ƒ/1.48 à ƒ/4) et le suivi du sujet ; sur iPad, les caméras USB-C sont reconnues. Le RAW, le ProRAW, le HDR, l'Apple Log et les cadences élevées dépendent de votre modèle : l'app lit les capacités réelles de chaque objectif et ne propose jamais une fonction indisponible."))
         .child(q("Mes photos sont-elles envoyées quelque part ?", "Non. L'app et le laboratoire en ligne calculent tout sur votre appareil. Il n'y a ni cloud ni compte obligatoire, et aucune image ne transite par nos serveurs."))
         .child(q("Le laboratoire en ligne lit-il les RAW ?", "Le laboratoire en ligne ouvre les images que votre navigateur sait décoder (JPEG, PNG, WebP, HEIC sur Safari). Le développement des RAW et ProRAW est réservé à l'application, qui accède aux données du capteur."))
         .child(q("Que deviennent mes projets si j'arrête l'abonnement ?", "Ils restent à vous : vos originaux, vos projets et vos exports restent accessibles et exportables. Seuls les outils Pro ne sont plus modifiables."))
@@ -373,7 +373,7 @@ pub fn render(req: &Request, count: u64, thanks: bool, error: bool) -> Page {
     page(
         req,
         Meta {
-            title: "Apertis — caméra pro, labo RAW et studio vidéo pour iPhone",
+            title: "Apertis — caméra pro, labo RAW et studio vidéo pour iPhone et iPad",
             description: "Apertis réunit une caméra manuelle avec RAW et ProRAW, un laboratoire de développement non destructif et un studio vidéo avec étalonnage. Essayez le labo photo et vidéo en ligne, gratuitement.",
             path: "/",
             app: false,
@@ -381,6 +381,6 @@ pub fn render(req: &Request, count: u64, thanks: bool, error: bool) -> Page {
         content,
     )
     .seo(Seo::new().json_ld(
-        r#"{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Apertis","operatingSystem":"iOS 17","applicationCategory":"PhotographyApplication","description":"Caméra pro, laboratoire RAW et studio vidéo pour iPhone.","offers":{"@type":"Offer","price":"0","priceCurrency":"EUR"}}"#,
+        r#"{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Apertis","operatingSystem":"iOS 17, iPadOS 17","applicationCategory":"PhotographyApplication","description":"Caméra pro, laboratoire RAW et studio vidéo pour iPhone et iPad.","offers":{"@type":"Offer","price":"0","priceCurrency":"EUR"}}"#,
     ))
 }

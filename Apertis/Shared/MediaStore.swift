@@ -13,7 +13,7 @@ import ApertisCore
 /// ├── Exports/
 /// └── LUTs/
 /// ```
-final class MediaStore: ObservableObject {
+final class MediaStore: ObservableObject, @unchecked Sendable {
     @Published private(set) var photoProjects: [PhotoProject] = []
     @Published private(set) var videoProjects: [VideoProject] = []
     /// Projets illisibles (fichier corrompu ou version plus récente) : signalés, jamais supprimés.
