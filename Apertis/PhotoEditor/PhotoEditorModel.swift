@@ -31,7 +31,7 @@ enum PhotoExportFormat: String, CaseIterable, Identifiable {
 
 /// État de l'éditeur photo. Les réglages en cours sont rendus en continu ; une étape
 /// d'historique est créée (et le projet enregistré) à la fin de chaque geste.
-final class PhotoEditorModel: ObservableObject {
+final class PhotoEditorModel: ObservableObject, @unchecked Sendable {
     @Published private(set) var project: PhotoProject
     @Published var settings: DevelopSettings {
         didSet { if settings != oldValue { scheduleRender() } }
