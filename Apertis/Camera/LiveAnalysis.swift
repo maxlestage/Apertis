@@ -47,14 +47,12 @@ final class LevelMonitor: ObservableObject {
         isAvailable = true
         motion.deviceMotionUpdateInterval = 1.0 / 30
         motion.startDeviceMotionUpdates(to: .main) { [weak self] data, _ in
-            guard let self, let gravity = data?.gravity else { return }
+            guard let gravity = data?.gravity else { return }
             // Appareil presque à plat : le niveau n'a pas de sens.
-            guard abs(gravity.z) < 0.85 else {
-                self.tilt = 0
-                return
-            }
             let angle = atan2(gravity.x, -gravity.y) * 180 / .pi
-            self.tilt = angle - (angle / 90).rounded() * 90
+            let tilt = abs(gravity.z) < 0.85 ? angle - (angle / 90).rounded() * 90 : 0
+            // La file `.main` exécute ce bloc sur le fil principal.
+            MainActor.assumeIsolated { self?.tilt = tilt }
         }
     }
 
