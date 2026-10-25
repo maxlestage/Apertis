@@ -324,7 +324,7 @@ private struct ToolPanel: View {
         .modifier(OptionalProLock(feature: tool.proFeature))
     }
 
-    private func slider(_ title: String, _ keyPath: WritableKeyPath<DevelopSettings, Double>,
+    private func slider(_ title: String, _ keyPath: WritableKeyPath<DevelopSettings, Double> & Sendable,
                         range: ClosedRange<Double> = -100...100, neutral: Double = 0, format: String = "%+.0f") -> some View {
         AdjustmentSlider(title: title, value: model.binding(keyPath), range: range, neutral: neutral, format: format) { model.commit($0) }
     }

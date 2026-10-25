@@ -126,10 +126,11 @@ final class MediaStore: ObservableObject, @unchecked Sendable {
         var p = project
         p.modifiedAt = Date()
         try ProjectIO.save(p, to: projects.appendingPathComponent("\(p.id.uuidString).apertis"))
-        let update = { [self] in
-            if let i = photoProjects.firstIndex(where: { $0.id == p.id }) { photoProjects[i] = p } else { photoProjects.insert(p, at: 0) }
+        let saved = p
+        let update: @MainActor @Sendable () -> Void = { [self] in
+            if let i = photoProjects.firstIndex(where: { $0.id == saved.id }) { photoProjects[i] = saved } else { photoProjects.insert(saved, at: 0) }
         }
-        if Thread.isMainThread { update() } else { DispatchQueue.main.async(execute: update) }
+        if Thread.isMainThread { MainActor.assumeIsolated(update) } else { DispatchQueue.main.async(execute: update) }
     }
 
     /// Supprime le projet. L'original n'est supprimé que si `removeOriginal` est vrai.
@@ -151,10 +152,11 @@ final class MediaStore: ObservableObject, @unchecked Sendable {
         var p = project
         p.modifiedAt = Date()
         try ProjectIO.save(p, to: projects.appendingPathComponent("\(p.id.uuidString).apertisvideo"))
-        let update = { [self] in
-            if let i = videoProjects.firstIndex(where: { $0.id == p.id }) { videoProjects[i] = p } else { videoProjects.insert(p, at: 0) }
+        let saved = p
+        let update: @MainActor @Sendable () -> Void = { [self] in
+            if let i = videoProjects.firstIndex(where: { $0.id == saved.id }) { videoProjects[i] = saved } else { videoProjects.insert(saved, at: 0) }
         }
-        if Thread.isMainThread { update() } else { DispatchQueue.main.async(execute: update) }
+        if Thread.isMainThread { MainActor.assumeIsolated(update) } else { DispatchQueue.main.async(execute: update) }
     }
 
     func delete(_ project: VideoProject) {
@@ -246,7 +248,7 @@ enum PhotoLibrarySaver {
         }
     }
 
-    private static func withAddPermission(_ work: @escaping () -> Void) {
+    private static func withAddPermission(_ work: @escaping @Sendable () -> Void) {
         PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
             if status == .authorized || status == .limited { work() }
         }
