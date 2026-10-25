@@ -107,7 +107,7 @@ pub const HSL_BANDS: [(&str, f32); 8] = [
 pub const GRADE_ZONES: [&str; 3] = ["Ombres", "Tons moyens", "Hautes lumières"];
 
 /// Les rapports de recadrage proposés : libellé, largeur / hauteur (0 = original).
-pub const ASPECTS: [(&str, f32); 7] = [
+pub const ASPECTS: [(&str, f32); 10] = [
     ("Original", 0.0),
     ("1:1", 1.0),
     ("4:5", 0.8),
@@ -115,6 +115,10 @@ pub const ASPECTS: [(&str, f32); 7] = [
     ("4:3", 4.0 / 3.0),
     ("16:9", 16.0 / 9.0),
     ("9:16", 9.0 / 16.0),
+    // Formats cinéma : Scope, Flat et panoramique XPan.
+    ("2,39:1", 2.39),
+    ("1,85:1", 1.85),
+    ("65:24", 65.0 / 24.0),
 ];
 
 /// Tous les réglages d'une image. Les curseurs vont de -100 à 100 (0 = neutre), sauf
@@ -1037,7 +1041,7 @@ mod tests {
             .collect();
         let mut frames = Vec::new();
         for (aspect, rotate, flip, straighten) in
-            [(0, 0, false, 0.0), (1, 0, false, 12.0), (2, 1, false, 0.0), (5, 2, true, -7.5), (6, 3, false, 30.0), (4, 1, true, 3.0)]
+            [(0, 0, false, 0.0), (1, 0, false, 12.0), (2, 1, false, 0.0), (5, 2, true, -7.5), (6, 3, false, 30.0), (4, 1, true, 3.0), (7, 0, false, 2.0), (9, 1, false, 0.0)]
         {
             let s = Settings { aspect, rotate, flip, straighten, ..Settings::default() };
             let g = geometry(&s, 4032, 3024);

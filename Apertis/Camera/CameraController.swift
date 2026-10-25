@@ -36,7 +36,7 @@ final class CameraController: NSObject, ObservableObject, @unchecked Sendable {
 
     // MARK: État publié
 
-    @Published private(set) var status: Status = .starting
+    @Published var status: Status = .starting
     @Published private(set) var mode: Mode = .photo
     @Published private(set) var capabilities = CaptureCapabilities()
     @Published private(set) var lens: LensKind = .wide
@@ -89,10 +89,38 @@ final class CameraController: NSObject, ObservableObject, @unchecked Sendable {
     @Published private(set) var aeAwbLocked = false
 
     // Aides à la prise de vue
-    @Published private(set) var liveHistogram: Histogram?
+    @Published var liveHistogram: Histogram?
     @Published private(set) var isLensSmudged = false
     /// Le bouton Commande de l'appareil photo affiche ses réglages en plein écran.
     @Published private(set) var systemControlsFullscreen = false
+
+    // Outils que l'appareil photo d'Apple ne propose pas
+    @Published var drive: DriveMode = .single
+    @Published var bracketing = Bracketing()
+    @Published var maxBracketCount = 0
+    @Published var longExposure = LongExposure()
+    /// Avancement de la pose longue en cours (0…1).
+    @Published var longExposureProgress: Double?
+    @Published var intervalometer = Intervalometer()
+    /// Photos prises dans la série d'intervalles en cours.
+    @Published var intervalShots: Int?
+    /// Sans fusion multi-images (Smart HDR, Deep Fusion) : rendu naturel, plus rapide.
+    @Published var minimalProcessing = false
+    /// Cadre de visée (index dans `CropSettings.aspects`, 0 = aucun).
+    @Published var frameGuide = 0
+    @Published var assist = AssistSettings()
+    @Published var assistOverlay: OverlayImage?
+    @Published var loupe: OverlayImage?
+    /// Cellule : écart entre la mesure et l'exposition réglée, en IL.
+    @Published var meterOffset: Float = 0
+    /// Indice de lumination de la scène (EV à 100 ISO).
+    @Published var sceneEV: Double?
+    /// Le prochain toucher mesure le blanc sur une charte grise au lieu de faire la mise au point.
+    @Published var measuringWhite = false
+    /// Priorités de l'automatisme d'exposition (iOS 27) ; nil = choix du système.
+    @Published var supportedSignals: [ExposureSignalOption] = []
+    @Published var customSignals: Set<ExposureSignalOption>?
+    @Published var presets: [CameraPreset] = CameraPresetStore.load()
 
     /// Appelé sur le fil principal pour chaque photo enregistrée.
     var onPhotoCaptured: ((CapturedPhoto) -> Void)?
@@ -102,22 +130,29 @@ final class CameraController: NSObject, ObservableObject, @unchecked Sendable {
     // MARK: AVFoundation
 
     let session = AVCaptureSession()
-    private let sessionQueue = DispatchQueue(label: "fr.apertis.camera.session")
-    private let histogramQueue = DispatchQueue(label: "fr.apertis.camera.histogram", qos: .utility)
+    let sessionQueue = DispatchQueue(label: "fr.apertis.camera.session")
+    let histogramQueue = DispatchQueue(label: "fr.apertis.camera.histogram", qos: .utility)
     private var devices: [LensKind: AVCaptureDevice] = [:]
-    private var videoInput: AVCaptureDeviceInput?
+    var videoInput: AVCaptureDeviceInput?
     private var audioInput: AVCaptureDeviceInput?
-    private let photoOutput = AVCapturePhotoOutput()
+    let photoOutput = AVCapturePhotoOutput()
     private let movieOutput = AVCaptureMovieFileOutput()
     private let analysisOutput = AVCaptureVideoDataOutput()
-    private var readiness: AVCapturePhotoOutputReadinessCoordinator?
-    private var photoDelegates: [Int64: PhotoCaptureDelegate] = [:]
+    var readiness: AVCapturePhotoOutputReadinessCoordinator?
+    var photoDelegates: [Int64: PhotoCaptureDelegate] = [:]
+    var bracketDelegates: [Int64: BracketCaptureDelegate] = [:]
     private var bayerRAWSupported = false
     private var recordingTimer: Timer?
     private var recordingStart: Date?
     private var isConfigured = false
-    private var analysisFrame = 0
+    var analysisFrame = 0
     private var observations: [NSKeyValueObservation] = []
+    /// État lu par l'analyse du viseur (`histogramQueue`), protégé par `analysisLock`.
+    let analysisLock = NSLock()
+    var analysisConfig = AnalysisConfig()
+    /// Pose longue en cours d'empilement (`histogramQueue` uniquement).
+    var stack: LongExposureStack?
+    var intervalTimer: Timer?
     private var notificationTokens: [NSObjectProtocol] = []
 
     /// Orientation de l'aperçu et des photos (fil principal).
@@ -159,7 +194,7 @@ final class CameraController: NSObject, ObservableObject, @unchecked Sendable {
         }
     }
 
-    private func publish(_ update: @escaping @Sendable () -> Void) {
+    func publish(_ update: @escaping @Sendable () -> Void) {
         DispatchQueue.main.async(execute: update)
     }
 
@@ -285,6 +320,7 @@ final class CameraController: NSObject, ObservableObject, @unchecked Sendable {
             photoOutput.maxPhotoDimensions = largest
         }
         enableLensSmudgeDetection(device)
+        orientAnalysisOutput()
         publishDeviceRanges(device)
         publish { self.attachRotationCoordinator(to: device) }
     }
@@ -317,6 +353,9 @@ final class CameraController: NSObject, ObservableObject, @unchecked Sendable {
         let programs = ExposureProgram.available(variableAperture: variable, customExposure: custom, priorityModes: priorityModes)
         let defaultAperture = apertures.lowerBound
         let (apertureRange, apertureStops, trackingSupported) = (apertures, stops, tracking)
+        let bracketCount = photoOutput.maxBracketedCapturePhotoCount
+        let signals = Self.supportedSignals(of: device)
+        analysisLock.withLock { analysisConfig.device = device }
         publish {
             let (apertures, stops, tracking) = (apertureRange, apertureStops, trackingSupported)
             self.isoRange = iso
@@ -332,6 +371,8 @@ final class CameraController: NSObject, ObservableObject, @unchecked Sendable {
             if !programs.contains(self.program) { self.program = .program }
             self.supportsSubjectTracking = tracking
             if !tracking { self.subjectTracking = false }
+            self.maxBracketCount = bracketCount
+            self.supportedSignals = signals
             self.photoResolutions = resolutions
             if let current = self.photoResolution, resolutions.contains(current) {} else { self.photoResolution = resolutions.last }
         }
@@ -469,10 +510,29 @@ final class CameraController: NSObject, ObservableObject, @unchecked Sendable {
         if let connection = previewLayer?.connection, connection.isVideoRotationAngleSupported(angle) {
             connection.videoRotationAngle = angle
         }
+        let mirrored = previewLayer?.connection?.isVideoMirrored ?? false
+        sessionQueue.async {
+            self.analysisOrientation = (angle, mirrored)
+            self.orientAnalysisOutput()
+        }
+    }
+
+    /// L'analyse du viseur reçoit des images orientées comme l'aperçu (aides et loupe superposables).
+    private var analysisOrientation: (angle: CGFloat, mirrored: Bool) = (90, false)
+
+    private func orientAnalysisOutput() {
+        guard let connection = analysisOutput.connection(with: .video) else { return }
+        if connection.isVideoRotationAngleSupported(analysisOrientation.angle) {
+            connection.videoRotationAngle = analysisOrientation.angle
+        }
+        if connection.isVideoMirroringSupported {
+            connection.automaticallyAdjustsVideoMirroring = false
+            connection.isVideoMirrored = analysisOrientation.mirrored
+        }
     }
 
     /// Angle de capture à l'horizontale, selon l'orientation réelle de l'appareil.
-    private var captureRotationAngle: CGFloat {
+    var captureRotationAngle: CGFloat {
         rotationCoordinator?.videoRotationAngleForHorizonLevelCapture ?? 90
     }
 
@@ -504,6 +564,7 @@ final class CameraController: NSObject, ObservableObject, @unchecked Sendable {
                 if self.session.canAddOutput(self.analysisOutput) { self.session.addOutput(self.analysisOutput) }
             }
             self.session.commitConfiguration()
+            if newMode == .photo { self.orientAnalysisOutput() }
             if newMode == .video, let target { self.applyVideoMode(target) }
             if let device = self.videoInput?.device { self.publishDeviceRanges(device) }
             self.publish { if newMode == .video { self.liveHistogram = nil } }
@@ -624,7 +685,7 @@ final class CameraController: NSObject, ObservableObject, @unchecked Sendable {
     // MARK: Réglages manuels
 
     /// Copie de l'état manuel propre à `sessionQueue` (jamais lue depuis le fil principal).
-    private struct HardwareState {
+    struct HardwareState {
         var program: ExposureProgram = .program
         var aperture: Float = 1.8
         var iso: Float = 100
@@ -639,16 +700,18 @@ final class CameraController: NSObject, ObservableObject, @unchecked Sendable {
         var tracking = false
         var trackingBias: Float = 0
         var locked = false
+        var signals: Set<ExposureSignalOption>?
     }
 
-    private var hardwareState = HardwareState()
+    var hardwareState = HardwareState()
 
     /// À appeler depuis le fil principal : publie l'état puis l'applique au matériel.
-    private func updateHardware(_ change: (inout HardwareState) -> Void) {
+    func updateHardware(_ change: (inout HardwareState) -> Void) {
         var state = HardwareState(program: program, aperture: aperture, iso: iso, isoAuto: isoAuto, shutter: shutter,
                                   bias: exposureBias, manualWhiteBalance: manualWhiteBalance, kelvin: kelvin,
                                   tint: whiteBalanceTint, manualFocus: manualFocus, lensPosition: lensPosition,
-                                  tracking: subjectTracking, trackingBias: trackingBias, locked: aeAwbLocked)
+                                  tracking: subjectTracking, trackingBias: trackingBias, locked: aeAwbLocked,
+                                  signals: customSignals)
         change(&state)
         program = state.program
         aperture = state.aperture
@@ -664,6 +727,7 @@ final class CameraController: NSObject, ObservableObject, @unchecked Sendable {
         subjectTracking = state.tracking
         trackingBias = state.trackingBias
         aeAwbLocked = state.locked
+        customSignals = state.signals
         let snapshot = state
         sessionQueue.async {
             self.hardwareState = snapshot
@@ -720,6 +784,18 @@ final class CameraController: NSObject, ObservableObject, @unchecked Sendable {
         stabilization = enabled
     }
 
+    /// Toucher dans le viseur : mise au point et mesure sur ce point (coordonnées capteur 0…1),
+    /// ou mesure du blanc sur une charte grise. `viewPoint` : position dans le viseur (0…1).
+    func touch(devicePoint: CGPoint, viewPoint: CGPoint) {
+        if measuringWhite {
+            measuringWhite = false
+            analysisLock.withLock { analysisConfig.whitePoint = viewPoint }
+            return
+        }
+        analysisLock.withLock { analysisConfig.loupeCenter = viewPoint }
+        focus(at: devicePoint)
+    }
+
     /// Mise au point et mesure sur un point (coordonnées capteur 0…1).
     func focus(at devicePoint: CGPoint) {
         sessionQueue.async {
@@ -738,13 +814,19 @@ final class CameraController: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     /// Applique `hardwareState` à l'objectif actif (sessionQueue).
-    private func applyHardware() {
+    func applyHardware() {
         let state = hardwareState
         guard let device = videoInput?.device, (try? device.lockForConfiguration()) != nil else { return }
         defer { device.unlockForConfiguration() }
+        applyExposureSignals(state.signals, to: device)
         applyExposure(state, to: device)
         applyWhiteBalance(state, to: device)
         applyFocus(state, to: device)
+    }
+
+    /// À appeler depuis le fil principal : modifie les priorités de l'automatisme.
+    func setExposureSignals(_ signals: Set<ExposureSignalOption>?) {
+        updateHardware { $0.signals = signals }
     }
 
     private func applyExposure(_ state: HardwareState, to device: AVCaptureDevice) {
@@ -822,8 +904,21 @@ final class CameraController: NSObject, ObservableObject, @unchecked Sendable {
 
     // MARK: Photo
 
+    /// Déclencheur : selon le mode d'entraînement.
+    @MainActor
+    func shutterPressed() {
+        switch drive {
+        case .single: capturePhoto()
+        case .bracketing: captureBracket()
+        case .longExposure: startLongExposure()
+        case .intervalometer: intervalShots == nil ? startIntervalometer() : stopIntervalometer()
+        }
+    }
+
     func capturePhoto() {
         let angle = captureRotationAngle
+        let minimal = minimalProcessing
+        let guide = frameGuide
         let raw = rawMode
         let resolution = photoResolution
         sessionQueue.async {
@@ -841,7 +936,7 @@ final class CameraController: NSObject, ObservableObject, @unchecked Sendable {
                 settings.photoQualityPrioritization = raw == .bayer ? .speed : .quality
             } else {
                 settings = processedFormat.map { AVCapturePhotoSettings(format: $0) } ?? AVCapturePhotoSettings()
-                settings.photoQualityPrioritization = .quality
+                settings.photoQualityPrioritization = minimal ? .speed : .quality
             }
             // Définition choisie (12, 24 ou 48 Mpx), jamais au-delà de ce que la sortie prépare.
             let maximum = output.maxPhotoDimensions
@@ -854,7 +949,7 @@ final class CameraController: NSObject, ObservableObject, @unchecked Sendable {
                 connection.videoRotationAngle = angle
             }
             let id = settings.uniqueID
-            let delegate = PhotoCaptureDelegate(isProRAW: isProRAW,
+            let delegate = PhotoCaptureDelegate(isProRAW: isProRAW, cropAspect: guide,
                                                 processedExtension: processedFormat == nil ? "jpg" : "heic") { result in
                 self.sessionQueue.async {
                     self.photoDelegates[id] = nil
@@ -985,18 +1080,6 @@ extension CameraController: AVCapturePhotoOutputReadinessCoordinatorDelegate {
     }
 }
 
-// MARK: - Histogramme en direct
-
-extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate {
-    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        // Environ 6 histogrammes par seconde suffisent à l'œil et ménagent la batterie.
-        analysisFrame += 1
-        guard analysisFrame % 5 == 0, let buffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-        let histogram = Histogram(bgra: buffer)
-        publish { self.liveHistogram = histogram }
-    }
-}
-
 // MARK: - Vidéo
 
 extension CameraController: AVCaptureFileOutputRecordingDelegate {
@@ -1032,12 +1115,12 @@ extension CameraController: AVCaptureFileOutputRecordingDelegate {
 }
 
 /// Reçoit les données d'une capture photo (RAW et/ou image traitée).
-private final class PhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate, @unchecked Sendable {
+final class PhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate, @unchecked Sendable {
     private var capture: CapturedPhoto
     private let completion: (CapturedPhoto?) -> Void
 
-    init(isProRAW: Bool, processedExtension: String, completion: @escaping (CapturedPhoto?) -> Void) {
-        capture = CapturedPhoto(processedExtension: processedExtension, isProRAW: isProRAW)
+    init(isProRAW: Bool, cropAspect: Int, processedExtension: String, completion: @escaping (CapturedPhoto?) -> Void) {
+        capture = CapturedPhoto(processedExtension: processedExtension, isProRAW: isProRAW, cropAspect: cropAspect)
         self.completion = completion
     }
 

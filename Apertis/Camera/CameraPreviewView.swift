@@ -14,7 +14,8 @@ struct CameraPreviewView: UIViewRepresentable {
 
         @objc func handleTap(_ recognizer: UITapGestureRecognizer) {
             let point = recognizer.location(in: self)
-            camera?.focus(at: previewLayer.captureDevicePointConverted(fromLayerPoint: point))
+            let viewPoint = CGPoint(x: point.x / max(bounds.width, 1), y: point.y / max(bounds.height, 1))
+            camera?.touch(devicePoint: previewLayer.captureDevicePointConverted(fromLayerPoint: point), viewPoint: viewPoint)
         }
 
         @objc func handlePinch(_ recognizer: UIPinchGestureRecognizer) {
