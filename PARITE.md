@@ -35,12 +35,20 @@ voyagent sous des clés que le site ignore.
 
 Identiques à la carte « Tarifs » du site.
 
-- **Gratuit** : caméra photo et vidéo, lumière, couleur, effets, cadrage, styles Original,
-  Naturel et Noir et blanc, styles personnels, montage simple (un étalonnage pour tout le
-  montage), exports JPEG et HEIF sans filigrane.
-- **Pro, 4,99 € par mois** (sans engagement, 7 jours d'essai, produit
-  `fr.apertis.pro.mensuel`) : courbes, TSL, étalonnage, LUT 3D, réduction du bruit RAW,
-  étalonnage plan par plan, piste musique, export HEIF 10 bits et TIFF 16 bits, tous les styles.
+- **Gratuit** : caméra photo et vidéo en mode P (correction d'exposition), RAW et ProRAW,
+  balance des blancs et mise au point manuelles, histogramme et niveau ; lumière, couleur,
+  effets, cadrage ; styles Original, Naturel et Noir et blanc, styles personnels ; montage
+  simple (un étalonnage pour tout le montage) ; exports JPEG et HEIF sans filigrane.
+- **Pro, 7,99 € par mois** (sans engagement, 7 jours d'essai, produit
+  `fr.apertis.pro.mensuel`) :
+  - appareil photo : modes A, S, M et ouverture variable, focus peaking, zébras, fausses
+    couleurs, loupe, bracketing, pose longue, intervallomètre, balance des blancs sur
+    charte grise, traitement minimal, priorités de l'automatisme, cadres de visée,
+    réglages personnels C1 à C3 ;
+  - retouche : courbes, TSL, étalonnage, LUT 3D, réduction du bruit RAW, tous les styles ;
+  - vidéo : étalonnage plan par plan, piste musique ;
+  - export HEIF 10 bits et TIFF 16 bits.
 
+À la fin de l'abonnement, l'appareil revient en mode P avec les aides désactivées.
 Un projet créé avec des outils Pro s'ouvre, s'affiche et s'exporte toujours après la fin
 de l'abonnement ; seuls ces outils ne sont plus modifiables.
