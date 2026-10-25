@@ -128,7 +128,7 @@ pub fn footer_bar(app: bool) -> Element {
                                 .child(img().attr("src", "/favicon.svg").attr("alt", "").attr("width", "28").attr("height", "28"))
                                 .child(span().text("Apertis")),
                         )
-                        .child(p().text("La caméra pro, le laboratoire RAW et le studio vidéo de l'iPhone.")),
+                        .child(p().text("La caméra pro, le laboratoire RAW et le studio vidéo de l'iPhone et de l'iPad.")),
                 )
                 .child(
                     div()

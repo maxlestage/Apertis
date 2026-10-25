@@ -31,7 +31,7 @@ enum PhotoExportFormat: String, CaseIterable, Identifiable {
 
 /// État de l'éditeur photo. Les réglages en cours sont rendus en continu ; une étape
 /// d'historique est créée (et le projet enregistré) à la fin de chaque geste.
-final class PhotoEditorModel: ObservableObject {
+final class PhotoEditorModel: ObservableObject, @unchecked Sendable {
     @Published private(set) var project: PhotoProject
     @Published var settings: DevelopSettings {
         didSet { if settings != oldValue { scheduleRender() } }
@@ -155,7 +155,7 @@ final class PhotoEditorModel: ObservableObject {
 
     // MARK: Historique
 
-    func binding(_ keyPath: WritableKeyPath<DevelopSettings, Double>) -> Binding<Double> {
+    func binding(_ keyPath: WritableKeyPath<DevelopSettings, Double> & Sendable) -> Binding<Double> {
         Binding(get: { self.settings[keyPath: keyPath] }, set: { self.settings[keyPath: keyPath] = $0 })
     }
 
@@ -302,10 +302,14 @@ struct Histogram: Equatable {
             if r >= 254 || g >= 254 || b >= 254 { high += 1 }
             if r <= 1 && g <= 1 && b <= 1 { low += 1 }
         }
+        self.init(bins: bins, clippedHighlights: high, clippedShadows: low, total: width * height)
+    }
+
+    /// À partir des comptes par classe et du nombre de pixels écrêtés.
+    init(bins: [[Int]], clippedHighlights high: Int, clippedShadows low: Int, total: Int) {
         let peak = Float(max(bins.flatMap { $0[2..<254] }.max() ?? 1, 1))
         channels = bins.map { $0.map { min(Float($0) / peak, 1) } }
-        let total = Float(width * height)
-        clippedHighlights = Float(high) / total > 0.002
-        clippedShadows = Float(low) / total > 0.002
+        clippedHighlights = Float(high) / Float(total) > 0.002
+        clippedShadows = Float(low) / Float(total) > 0.002
     }
 }
