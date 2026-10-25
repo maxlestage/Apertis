@@ -316,7 +316,9 @@ final class CameraController: NSObject, ObservableObject, @unchecked Sendable {
         let variable = apertures.lowerBound < apertures.upperBound
         let programs = ExposureProgram.available(variableAperture: variable, customExposure: custom, priorityModes: priorityModes)
         let defaultAperture = apertures.lowerBound
+        let (apertureRange, apertureStops, trackingSupported) = (apertures, stops, tracking)
         publish {
+            let (apertures, stops, tracking) = (apertureRange, apertureStops, trackingSupported)
             self.isoRange = iso
             self.shutterRange = shutter
             self.biasRange = bias
