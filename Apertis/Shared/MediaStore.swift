@@ -116,7 +116,13 @@ final class MediaStore: ObservableObject, @unchecked Sendable {
         } else {
             throw CocoaError(.fileWriteUnknown)
         }
-        let project = PhotoProject(source: reference)
+        var project = PhotoProject(source: reference)
+        if let note = capture.note { project.keywords.append(note) }
+        if capture.cropAspect > 0, CropSettings.aspects.indices.contains(capture.cropAspect) {
+            var settings = DevelopSettings()
+            settings.crop.aspect = capture.cropAspect
+            project.history.commit(settings, label: "Cadre \(CropSettings.aspects[capture.cropAspect].label)")
+        }
         try save(project)
         if saveCapturesToPhotos { PhotoLibrarySaver.save(capture) }
         return project
@@ -207,6 +213,11 @@ struct CapturedPhoto {
     var processedData: Data?
     var processedExtension: String = "heic"
     var isProRAW: Bool = false
+    /// Cadre de visée choisi à la prise de vue (index dans `CropSettings.aspects`) :
+    /// appliqué comme recadrage non destructif.
+    var cropAspect: Int = 0
+    /// Mode de prise de vue, noté dans l'historique (« Bracketing −1 IL », « Pose longue 2 s »…).
+    var note: String?
 }
 
 /// Enregistrement dans la photothèque système (autorisation « ajout uniquement »).
