@@ -86,16 +86,25 @@ extension CameraController {
 
     func setDrive(_ mode: DriveMode) {
         guard intervalShots == nil, longExposureProgress == nil else { return }
+        guard mode == .single || requirePro(.captureModes) else { return }
         drive = mode
     }
 
     func setBracketing(_ value: Bracketing) { bracketing = value }
     func setLongExposure(_ value: LongExposure) { longExposure = value }
     func setIntervalometer(_ value: Intervalometer) { intervalometer = value }
-    func setMinimalProcessing(_ value: Bool) { minimalProcessing = value }
-    func setFrameGuide(_ aspect: Int) { frameGuide = aspect }
+    func setMinimalProcessing(_ value: Bool) {
+        guard !value || requirePro(.advancedCapture) else { return }
+        minimalProcessing = value
+    }
+
+    func setFrameGuide(_ aspect: Int) {
+        guard aspect == 0 || requirePro(.advancedCapture) else { return }
+        frameGuide = aspect
+    }
 
     func setAssist(_ value: AssistSettings) {
+        guard !(value.needsOverlay || value.loupe) || requirePro(.viewfinderAssists) else { return }
         assist = value
         analysisLock.withLock { analysisConfig.assist = value }
         if !value.needsOverlay { assistOverlay = nil }
@@ -103,7 +112,10 @@ extension CameraController {
     }
 
     /// Le prochain toucher dans le viseur mesure le blanc (charte grise, mur blanc, feuille).
-    func beginWhiteMeasurement() { measuringWhite = true }
+    func beginWhiteMeasurement() {
+        guard requirePro(.advancedCapture) else { return }
+        measuringWhite = true
+    }
     func cancelWhiteMeasurement() { measuringWhite = false }
 
     static func supportedSignals(of device: AVCaptureDevice) -> [ExposureSignalOption] {
@@ -254,6 +266,7 @@ extension CameraController {
     // MARK: Réglages personnels
 
     func savePreset(slot: Int, name: String) {
+        guard requirePro(.advancedCapture) else { return }
         let preset = CameraPreset(slot: slot, name: name.isEmpty ? "C\(slot)" : name, program: program, aperture: aperture,
                                   shutter: shutter, iso: iso, isoAuto: isoAuto, exposureBias: exposureBias,
                                   manualWhiteBalance: manualWhiteBalance, kelvin: kelvin, tint: whiteBalanceTint,
@@ -273,6 +286,7 @@ extension CameraController {
 
     /// Rappelle un réglage : ce que l'objectif actuel ne sait pas faire est ignoré.
     func applyPreset(_ preset: CameraPreset) {
+        guard requirePro(.advancedCapture) else { return }
         if let stop = focalStops.first(where: { $0.focalLength == preset.focalLength }) { selectFocal(stop) }
         if let raw = RAWMode(rawValue: preset.rawMode) { setRAWMode(raw) }
         if let mp = preset.megapixels, let resolution = photoResolutions.first(where: { Int($0.megapixels.rounded()) == mp }) {
