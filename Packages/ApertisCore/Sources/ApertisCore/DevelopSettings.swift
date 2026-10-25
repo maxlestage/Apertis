@@ -105,6 +105,8 @@ public struct CropSettings: Codable, Equatable, Sendable {
     /// Formats proposés : libellé, largeur / hauteur (0 = format d'origine).
     public static let aspects: [(label: String, ratio: Double)] = [
         ("Original", 0), ("1:1", 1), ("4:5", 0.8), ("3:2", 1.5), ("4:3", 4.0 / 3.0), ("16:9", 16.0 / 9.0), ("9:16", 9.0 / 16.0),
+        // Formats cinéma : Scope, Flat et panoramique XPan.
+        ("2,39:1", 2.39), ("1,85:1", 1.85), ("65:24", 65.0 / 24.0),
     ]
 
     /// Index dans `aspects`.

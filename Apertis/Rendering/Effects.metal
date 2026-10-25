@@ -45,3 +45,40 @@ float4 apertisEffects(sample_t s, float4 frame, float vignette, float grain, flo
 }
 
 }}
+
+// Aides à la visée, sur l'image du viseur (valeurs encodées, sans gestion des couleurs) :
+// fausses couleurs, zébras et focus peaking. Le résultat se superpose au viseur ; il est
+// transparent là où il n'y a rien à signaler.
+extern "C" { namespace coreimage {
+
+// options : x = fausses couleurs (0/1), y = seuil des zébras (0 = désactivés),
+//           z = seuil du peaking (0 = désactivé), w = largeur des rayures en pixels.
+float4 apertisAssist(sample_t s, sample_t edges, float4 options, destination dest) {
+    float l = dot(s.rgb, float3(0.2126, 0.7152, 0.0722));
+    float4 out = float4(0.0);
+    if (options.x > 0.5) {
+        // Échelle de fausses couleurs inspirée des moniteurs de tournage.
+        float3 c = float3(l);
+        if (l < 0.025) c = float3(0.55, 0.0, 0.65);          // noirs bouchés
+        else if (l < 0.10) c = float3(0.05, 0.25, 0.95);     // ombres profondes
+        else if (l < 0.20) c = float3(0.10, 0.55, 0.75);     // ombres
+        else if (l > 0.40 && l < 0.48) c = float3(0.15, 0.80, 0.25);  // gris moyen 18 %
+        else if (l > 0.62 && l < 0.70) c = float3(0.95, 0.55, 0.65);  // peau claire
+        else if (l > 0.98) c = float3(1.0, 0.1, 0.1);        // blancs brûlés
+        else if (l > 0.90) c = float3(1.0, 0.85, 0.1);       // hautes lumières
+        out = float4(c, 1.0);
+    }
+    if (options.y > 0.0 && l >= options.y) {
+        float2 p = dest.coord();
+        float stripe = fmod(p.x + p.y, options.w * 2.0) < options.w ? 1.0 : 0.0;
+        out = float4(float3(stripe), 0.75);
+    }
+    if (options.z > 0.0) {
+        float e = dot(edges.rgb, float3(0.3333));
+        if (e > options.z) out = float4(1.0, 0.15, 0.15, 1.0);
+    }
+    // Sortie prémultipliée.
+    return float4(out.rgb * out.a, out.a);
+}
+
+}}
